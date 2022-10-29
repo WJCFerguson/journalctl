@@ -1,4 +1,4 @@
-;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
+;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-biding: t; -*-
 
 ;; Copyright (C) 2022  James Ferguson
 
@@ -49,7 +49,7 @@
 (defvar journalctl-program (executable-find "journalctl")
   "Path to the program used `journalctl'")
 
-(defvar journalctl-arguments '("--follow" "--lines=10")
+(defvar journalctl-arguments '("--output=json")
   "Command-line arguments to pass to `journalctl-program'")
 
 (defvar journalctl-mode-map
@@ -58,6 +58,42 @@
     (define-key map "\t" 'completion-at-point)
     map)
   "Basic mode map for `journalctl'")
+
+(defvar-local journalctl--read-buffer ""
+  "A read buffer for incoming message data so it can be parsed line-wise.")
+
+(defun journalctl--filter-input (incoming)
+  "Parse an incoming json line into an annotated text line."
+  ;; put it in the buffer
+  (setq journalctl--read-buffer (concat journalctl--read-buffer incoming))
+  ;; check buffer for complete messages
+  (let (output)
+    (while-let ((newline-pos (string-search "\n" journalctl--read-buffer))
+                (line (substring journalctl--read-buffer 0 newline-pos)))
+      (setq journalctl--read-buffer (substring journalctl--read-buffer (+ 1 newline-pos)))
+      (setq output (concat output (journalctl--parse-line line))))
+    output))
+
+(defun journalctl--parse-line (line)
+  "Take an incoming JSON line and return the text to insert into the buffer."
+  (condition-case err
+      (if-let ((data (json-parse-string line)))
+          (concat (gethash "MESSAGE" data) "\n")
+        (message "ERROR: failed to parse line: %s" line))
+    ((json-parse-error json-readtable-error)
+     (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))))
+
+(defun journalctl--initialize ()
+  "Helper function to initialize Journalctl"
+  (setq-local comint-preoutput-filter-functions '(journalctl--filter-input)))
+
+(define-derived-mode journalctl-mode comint-mode "Journalctl"
+  "Major mode for `run-journalctl'.
+
+\\<journalctl-mode-map>"
+  ;; body here.  Does the previous line make any sense?
+)
+(add-hook 'journalctl-mode-hook 'journalctl--initialize)
 
 ;;;###autoload
 (defun journalctl ()
@@ -70,17 +106,6 @@
             buffer-name
             journalctl-program nil journalctl-arguments)))
   (journalctl-mode))
-
-(defun journalctl--initialize ()
-  "Helper function to initialize Journalctl")
-
-(define-derived-mode journalctl-mode comint-mode "Journalctl"
-  "Major mode for `run-journalctl'.
-
-\\<journalctl-mode-map>"
-  ;; body here.  Does the previous line make any sense?
-)
-(add-hook 'journalctl-mode-hook 'journalctl--initialize)
 
 (provide 'journalctl-mode)
 ;;; journalctl-mode.el ends here
