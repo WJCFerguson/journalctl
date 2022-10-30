@@ -93,14 +93,22 @@
     (cons seconds microseconds)))
 
 (defun journalctl--format-line (record)
-  "Format journald RECORD as a text line"
+  "Return journald RECORD formatted as a propertized text line.
+
+This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((timestamp (journalctl--timestamp record))
          (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
-    (concat
-     (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
-                 'face 'font-lock-comment-face)
-     (gethash "MESSAGE" record)
-     "\n")))
+    (let ((result
+           (concat
+            (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
+                        'face 'font-lock-comment-face)
+            (gethash "MESSAGE" record)
+            "\n")))
+      ;; put the record as a text property on the line
+      (put-text-property 0 (length result)
+                         'journalctl--record record
+                         result)
+      result)))
 
 (define-derived-mode journalctl-mode comint-mode "Journalctl"
   "Major mode for `run-journalctl'.
