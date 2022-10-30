@@ -51,11 +51,14 @@
 (defvar journalctl-program (executable-find "journalctl")
   "Path to the program used `journalctl'")
 
-(defvar journalctl-arguments '("--output=json")
+(defvar journalctl-arguments '()
   "Command-line arguments to pass to `journalctl-program'")
 
+(defvar journalctl--required-arguments '("--output=json")
+  "Arguments non-negotiable for journalctl ")
+
 ;; =================================== debug ===================================
-(setq journalctl-arguments '("--output=json" "--lines=5" "--since=15:00"))
+(setq journalctl-arguments '("-f"))
 ;; ================================= end debug =================================
 
 (defvar journalctl-mode-map
@@ -98,17 +101,18 @@
 This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((timestamp (journalctl--timestamp record))
          (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
-    (let ((result
-           (concat
-            (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
-                        'face 'font-lock-comment-face)
-            (gethash "MESSAGE" record)
-            "\n")))
+    (let* ((result (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
+                               'face 'font-lock-comment-face))
+           (pre-message-length (length result)))
+      (setq result (concat result
+                           (propertize
+                            (gethash "MESSAGE" record)
+                            'wrap-prefix (make-string pre-message-length ?\ ))))
       ;; put the record as a text property on the line
       (put-text-property 0 (length result)
                          'journalctl--record record
                          result)
-      result)))
+      (concat result "\n"))))
 
 (define-derived-mode journalctl-mode comint-mode "Journalctl"
   "Major mode for `run-journalctl'.
@@ -118,6 +122,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
 
   ;; we handle all the highlighting.  Or does this break
   (font-lock-mode -1)
+  (visual-line-mode)
   (setq-local
    ;; parse incoming JSON into text and a record
    comint-preoutput-filter-functions '(journalctl--filter-incoming)
@@ -133,7 +138,8 @@ This stores RECORD as `journalctl--record record' property on the line itself."
     (pop-to-buffer-same-window
      (apply 'make-comint-in-buffer "Journalctl"
             buffer-name
-            journalctl-program nil journalctl-arguments)))
+            journalctl-program nil
+            (append journalctl-arguments journalctl--required-arguments))))
   (journalctl-mode))
 
 (provide 'journalctl-mode)
