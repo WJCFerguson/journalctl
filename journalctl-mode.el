@@ -48,6 +48,8 @@
 ;;
 ;;; Code:
 
+(require 'xref)
+
 ;; =============================== Customization ===============================
 (defgroup journalctl nil
   "Journalctl browsing mode."
@@ -104,13 +106,6 @@ Should be configured to have equal length"
 ;; =================================== debug ===================================
 (setq journalctl-arguments '("-f" "-t" "flange"))
 ;; ================================= end debug =================================
-
-(defvar journalctl-mode-map
-  (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
-    ;; example definition
-    (define-key map "\t" 'completion-at-point)
-    map)
-  "Basic mode map for `journalctl'")
 
 (defvar-local journalctl--read-buffer ""
   "A read buffer for incoming message data so it can be parsed line-wise.")
@@ -208,10 +203,34 @@ This stores RECORD as `journalctl--record record' property on the line itself."
                        result)
     (concat result "\n")))
 
+(defun journalctl--get-line-record (&optional at-point)
+  "Get the parsed record from the current line, or AT-POINT if set."
+  (let ((at-point (or at-point (point))))
+    (get-text-property at-point 'journalctl--record)))
+
+(defun journalctl-jump-to-line-source ()
+  "Jump to the source of the message if possible."
+  (interactive)
+  (let* ((record (journalctl--get-line-record))
+         (file (journalctl--get-value "CODE_FILE" record)))
+    (when (file-exists-p file)
+      ;; with M-. we're emulating xref, so allow us to jump back with M-,
+      (xref-push-marker-stack)
+      (find-file file)
+      (when-let ((line (journalctl--get-value "CODE_LINE" record)))
+        (goto-line (string-to-number line))))))
+
+(defvar journalctl-mode-map
+  (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
+    ;; example definition
+    (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
+    map)
+  "Basic mode map for `journalctl'")
+
 (define-derived-mode journalctl-mode comint-mode "Journalctl"
   "Major mode for `run-journalctl'.
 
-\\{journalctl-mode-map>}"
+\\{journalctl-mode-map}"
   ;; body here.  Does the previous line make any sense?
 
   ;; we handle all the highlighting.  Or does this break
