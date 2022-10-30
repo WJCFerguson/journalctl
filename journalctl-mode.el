@@ -42,7 +42,9 @@
 ;;
 ;;;; Tips/Tricks
 ;;
-;; journalctl-mode adds an xref source so...
+;; * Don't forget good old regex highlighting ... M-s h (r|l)' (also from isearch)
+;;
+;; xref integration (?)
 ;;
 ;;; Code:
 
@@ -51,6 +53,10 @@
 
 (defvar journalctl-arguments '("--output=json")
   "Command-line arguments to pass to `journalctl-program'")
+
+;; =================================== debug ===================================
+(setq journalctl-arguments '("--output=json" "--lines=5" "--since=15:00"))
+;; ================================= end debug =================================
 
 (defvar journalctl-mode-map
   (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
@@ -62,38 +68,53 @@
 (defvar-local journalctl--read-buffer ""
   "A read buffer for incoming message data so it can be parsed line-wise.")
 
-(defun journalctl--filter-input (incoming)
-  "Parse an incoming json line into an annotated text line."
-  ;; put it in the buffer
+(defun journalctl--filter-incoming (incoming)
+  "Capture incoming JSON stream and buffer to read line-wise."
   (setq journalctl--read-buffer (concat journalctl--read-buffer incoming))
-  ;; check buffer for complete messages
   (let (output)
     (while-let ((newline-pos (string-search "\n" journalctl--read-buffer))
                 (line (substring journalctl--read-buffer 0 newline-pos)))
       (setq journalctl--read-buffer (substring journalctl--read-buffer (+ 1 newline-pos)))
-      (setq output (concat output (journalctl--parse-line line))))
+      (setq output
+            (concat
+             output
+             (condition-case err
+                 (journalctl--format-line (json-parse-string line))
+               ((json-parse-error json-readtable-error)
+                (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))))))
     output))
 
-(defun journalctl--parse-line (line)
-  "Take an incoming JSON line and return the text to insert into the buffer."
-  (condition-case err
-      (if-let ((data (json-parse-string line)))
-          (concat (gethash "MESSAGE" data) "\n")
-        (message "ERROR: failed to parse line: %s" line))
-    ((json-parse-error json-readtable-error)
-     (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))))
+(defun journalctl--timestamp (record)
+  "Return a cons of (seconds . microseconds) for a journald RECORD."
+  (let* ((timestr (gethash "__REALTIME_TIMESTAMP" record))
+         (len (length timestr))
+         (seconds (string-to-number (substring timestr 0 (- len 6))))
+         (microseconds (string-to-number (substring timestr (- len 6) len))))
+    (cons seconds microseconds)))
 
-(defun journalctl--initialize ()
-  "Helper function to initialize Journalctl"
-  (setq-local comint-preoutput-filter-functions '(journalctl--filter-input)))
+(defun journalctl--format-line (record)
+  "Format journald RECORD as a text line"
+  (let* ((timestamp (journalctl--timestamp record))
+         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
+    (concat
+     (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
+                 'face 'font-lock-comment-face)
+     (gethash "MESSAGE" record)
+     "\n")))
 
 (define-derived-mode journalctl-mode comint-mode "Journalctl"
   "Major mode for `run-journalctl'.
 
 \\<journalctl-mode-map>"
   ;; body here.  Does the previous line make any sense?
-)
-(add-hook 'journalctl-mode-hook 'journalctl--initialize)
+
+  ;; we handle all the highlighting.  Or does this break
+  (font-lock-mode -1)
+  (setq-local
+   ;; parse incoming JSON into text and a record
+   comint-preoutput-filter-functions '(journalctl--filter-incoming)
+   ;; there is probably more we could disable in comint...
+   comint-highlight-input nil))
 
 ;;;###autoload
 (defun journalctl ()
