@@ -48,6 +48,50 @@
 ;;
 ;;; Code:
 
+;; =============================== Customization ===============================
+(defgroup journalctl nil
+  "Journalctl browsing mode."
+  :group 'convenience
+  :prefix "journalctl-")
+
+(defcustom journalctl-field-format-functions
+  '(("PRIORITY" . journalctl--format-priority)
+    ("__REALTIME_TIMESTAMP" . journalctl--format-timestamp)
+    ("_PID" . journalctl--format-pid)
+    ("MESSAGE" . journalctl--priority-colored-field))
+  "Alist mapping journalctl json keys to functions returning display string.
+
+Functions receive arguments (FIELD-NAME RECORD), where RECORD is
+the parsed-json record."
+  :type '(alist :key-type string :value-type function))
+
+(defcustom journalctl-priority-strings
+  '((0 . "!")
+    (1 . "A")
+    (2 . "C")
+    (3 . "E")
+    (4 . "W")
+    (5 . "N")
+    (6 . "I")
+    (7 . "D"))
+  "Display strings for various priorities.
+
+Should be configured to have equal length"
+  :type '(alist :key-type number :value-type string))
+
+(defcustom journalctl-priority-faces
+  '((0 . 'compilation-error)
+    (1 . 'compilation-error)
+    (2 . 'compilation-error)
+    (3 . 'compilation-error)
+    (4 . 'compilation-warning)
+    (5 . 'compilation-warning)
+    (7 . 'shadow))
+  "Display faces by priority"
+  :type '(alist :key-type number :value-type string))
+
+;; ============================= End Customization =============================
+
 (defvar journalctl-program (executable-find "journalctl")
   "Path to the program used `journalctl'")
 
@@ -58,7 +102,7 @@
   "Arguments non-negotiable for journalctl ")
 
 ;; =================================== debug ===================================
-(setq journalctl-arguments '("-f"))
+(setq journalctl-arguments '("-f" "-t" "flange"))
 ;; ================================= end debug =================================
 
 (defvar journalctl-mode-map
@@ -70,6 +114,62 @@
 
 (defvar-local journalctl--read-buffer ""
   "A read buffer for incoming message data so it can be parsed line-wise.")
+
+(defun journalctl--get-value (field-name record)
+  "Return FIELD-NAME from RECORD"
+  (gethash field-name record))
+
+(defun journalctl--priority-face (record &optional priority-num)
+  "Return the priority-based face (if any) for RECORD.
+
+If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
+  (let ((priority-num (or priority-num
+                          (string-to-number (journalctl--get-value "PRIORITY"
+                                                                   record)))))
+    (alist-get priority-num journalctl-priority-faces)))
+
+(defun journalctl--priority-colored-field (field-name record)
+  "Returns FIELD_NAME from RECORD for display as a priority level."
+  (propertize (journalctl--get-value field-name record)
+                'face (journalctl--priority-face record)))
+
+(defun journalctl--format-priority (field-name record)
+  "Returns FIELD_NAME from RECORD for display as a priority level."
+  (let* ((value (journalctl--get-value field-name record))
+         (priority-num (string-to-number value)))
+    (propertize (alist-get priority-num journalctl-priority-strings)
+                'face (journalctl--priority-face nil priority-num))))
+
+(defun journalctl--timestamp (field-name record)
+  "Return a cons of (seconds . microseconds) for a journald RECORD."
+  (let* ((timestr (journalctl--get-value field-name record))
+         (len (length timestr))
+         (seconds (string-to-number (substring timestr 0 (- len 6))))
+         (microseconds (string-to-number (substring timestr (- len 6) len))))
+    (cons seconds microseconds)))
+
+(defun journalctl--format-timestamp (field-name record)
+  "Returns PRIORITY field value for display"
+  (let* ((timestamp (journalctl--timestamp field-name record))
+         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
+    (propertize (concat display-time "."
+                        (format "%06d" (cdr timestamp)))
+                'face 'font-lock-comment-face)))
+
+(defun journalctl--format-pid (field-name record)
+  "Returns _PID field value for display"
+  (format "[%s]" (journalctl--get-value field-name record)))
+
+(defun journalctl--format-field (field-name record)
+    "Format FIELD_NAME from RECORD for display.
+
+Finds format function from alist `journalctl-field-dformat-functions
+falling back to simple string value display.
+"
+  (funcall (alist-get field-name journalctl-field-format-functions
+                      'journalctl--get-value nil 'string-equal)
+           field-name
+           record))
 
 (defun journalctl--filter-incoming (incoming)
   "Capture incoming JSON stream and buffer to read line-wise."
@@ -87,51 +187,31 @@
                 (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))))))
     output))
 
-(defun journalctl--timestamp (record)
-  "Return a cons of (seconds . microseconds) for a journald RECORD."
-  (let* ((timestr (gethash "__REALTIME_TIMESTAMP" record))
-         (len (length timestr))
-         (seconds (string-to-number (substring timestr 0 (- len 6))))
-         (microseconds (string-to-number (substring timestr (- len 6) len))))
-    (cons seconds microseconds)))
-
 (defun journalctl--format-line (record)
   "Return journald RECORD formatted as a propertized text line.
 
 This stores RECORD as `journalctl--record record' property on the line itself."
-  (let* ((timestamp (journalctl--timestamp record))
-         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp)))
-         (timestamp-str (propertize (concat display-time "."
-                                            (number-to-string (cdr timestamp)))
-                                    'face 'font-lock-comment-face)))
-    (let* ((priority (string-to-number (gethash "PRIORITY" record)))
-           (priority-face (cond
-                           ((<= priority 3) 'compilation-error)
-                           ((= priority 4) 'compilation-warning)
-                           ((>= priority 7) 'shadow)
-                           (t 'default)))
-           (result (concat
-                    timestamp-str " "
-                    (gethash "_HOSTNAME" record) " "
-                    (gethash "SYSLOG_IDENTIFIER" record)
-                    (format "[%s]" (gethash "_PID" record))
-                    ": "))
-           (pre-message-length (length result)))
-      (setq result (concat result
-                           (propertize
-                            (gethash "MESSAGE" record)
-                            'wrap-prefix (make-string pre-message-length ?\ )
-                            'face priority-face)))
-      ;; put the record as a text property on the line
-      (put-text-property 0 (length result)
-                         'journalctl--record record
-                         result)
-      (concat result "\n"))))
+  (let* ((result (concat
+                  (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
+                  (journalctl--format-field "_HOSTNAME" record) " "
+                  (journalctl--format-field "SYSLOG_IDENTIFIER" record)
+                  (journalctl--format-field "_PID" record) " "
+                  (journalctl--format-field "PRIORITY" record) ": "))
+         (pre-message-length (length result)))
+    (setq result (concat result
+                         (propertize
+                          (journalctl--format-field "MESSAGE" record)
+                          'wrap-prefix (make-string pre-message-length ?\ ))))
+    ;; put the record as a text property on the line
+    (put-text-property 0 (length result)
+                       'journalctl--record record
+                       result)
+    (concat result "\n")))
 
 (define-derived-mode journalctl-mode comint-mode "Journalctl"
   "Major mode for `run-journalctl'.
 
-\\<journalctl-mode-map>"
+\\{journalctl-mode-map>}"
   ;; body here.  Does the previous line make any sense?
 
   ;; we handle all the highlighting.  Or does this break
