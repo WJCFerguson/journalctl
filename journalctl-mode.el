@@ -100,14 +100,28 @@
 
 This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((timestamp (journalctl--timestamp record))
-         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
-    (let* ((result (propertize (concat display-time "." (number-to-string (cdr timestamp)) " ")
-                               'face 'font-lock-comment-face))
+         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp)))
+         (timestamp-str (propertize (concat display-time "."
+                                            (number-to-string (cdr timestamp)))
+                                    'face 'font-lock-comment-face)))
+    (let* ((priority (string-to-number (gethash "PRIORITY" record)))
+           (priority-face (cond
+                           ((<= priority 3) 'compilation-error)
+                           ((= priority 4) 'compilation-warning)
+                           ((>= priority 7) 'shadow)
+                           (t 'default)))
+           (result (concat
+                    timestamp-str " "
+                    (gethash "_HOSTNAME" record) " "
+                    (gethash "SYSLOG_IDENTIFIER" record)
+                    (format "[%s]" (gethash "_PID" record))
+                    ": "))
            (pre-message-length (length result)))
       (setq result (concat result
                            (propertize
                             (gethash "MESSAGE" record)
-                            'wrap-prefix (make-string pre-message-length ?\ ))))
+                            'wrap-prefix (make-string pre-message-length ?\ )
+                            'face priority-face)))
       ;; put the record as a text property on the line
       (put-text-property 0 (length result)
                          'journalctl--record record
