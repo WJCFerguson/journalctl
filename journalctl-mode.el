@@ -192,11 +192,12 @@ This stores RECORD as `journalctl--record record' property on the line itself."
                   (journalctl--format-field "SYSLOG_IDENTIFIER" record)
                   (journalctl--format-field "_PID" record) " "
                   (journalctl--format-field "PRIORITY" record) ": "))
-         (pre-message-length (length result)))
+         (message-prefix (make-string (length result) ?\ )))
     (setq result (concat result
                          (propertize
                           (journalctl--format-field "MESSAGE" record)
-                          'wrap-prefix (make-string pre-message-length ?\ ))))
+                          'wrap-prefix message-prefix
+                          'line-prefix message-prefix)))
     ;; put the record as a text property on the line
     (put-text-property 0 (length result)
                        'journalctl--record record
