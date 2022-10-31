@@ -1,4 +1,4 @@
-;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-biding: t; -*-
+;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022  James Ferguson
 
