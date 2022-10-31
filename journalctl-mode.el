@@ -135,9 +135,9 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
     (propertize (alist-get priority-num journalctl-priority-strings)
                 'face (journalctl--priority-face nil priority-num))))
 
-(defun journalctl--timestamp (field-name record)
+(defun journalctl--timestamp (record)
   "Return a cons of (seconds . microseconds) for a journald RECORD."
-  (let* ((timestr (journalctl--get-value field-name record))
+  (let* ((timestr (journalctl--get-value "__REALTIME_TIMESTAMP" record))
          (len (length timestr))
          (seconds (string-to-number (substring timestr 0 (- len 6))))
          (microseconds (string-to-number (substring timestr (- len 6) len))))
@@ -145,7 +145,7 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
 
 (defun journalctl--format-timestamp (field-name record)
   "Returns PRIORITY field value for display"
-  (let* ((timestamp (journalctl--timestamp field-name record))
+  (let* ((timestamp (journalctl--timestamp record))
          (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
     (propertize (concat display-time "."
                         (format "%06d" (cdr timestamp)))
@@ -182,26 +182,39 @@ falling back to simple string value display.
                   (format  "ERROR: parse fail: %S\n\n%S\n\n" err line)))))))
     output))
 
+(defun journalctl--make-help-message (record)
+  "Return a help message for help-echo on the printed line for RECORD."
+  (let* ((timestamp (journalctl--timestamp record))
+         (timestr (format (format-time-string "%a %F %H:%M:%S.%%06d %p %Z" (car timestamp))
+                           (cdr timestamp)))
+         (file (journalctl--get-value "CODE_FILE" record))
+         (unit (or (journalctl--get-value "_SYSTEMD_USER_UNIT" record)
+                   (journalctl--get-value "_SYSTEMD_UNIT" record))))
+    (concat timestr
+            (if file (format "\nSource: %s:%s"
+                             file
+                             (journalctl--get-value "CODE_LINE" record)))
+            "\nHost: " (journalctl--get-value "_HOSTNAME" record)
+            "\nPID: " (journalctl--get-value "_PID" record)
+            )))
+
 (defun journalctl--format-line (record)
   "Return journald RECORD formatted as a propertized text line.
 
 This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((result (concat
                   (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
-                  (journalctl--format-field "_HOSTNAME" record) " "
-                  (journalctl--format-field "SYSLOG_IDENTIFIER" record)
-                  (journalctl--format-field "_PID" record) " "
-                  (journalctl--format-field "PRIORITY" record) ": "))
+                  (journalctl--format-field "SYSLOG_IDENTIFIER" record) " "
+                  (journalctl--format-field "PRIORITY" record) ":"))
+         (help-message (journalctl--make-help-message record))
          (message-prefix (make-string (length result) ?\ )))
     (setq result (concat result
                          (propertize
                           (journalctl--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
                           'line-prefix message-prefix)))
-    ;; put the record as a text property on the line
-    (put-text-property 0 (length result)
-                       'journalctl--record record
-                       result)
+    (put-text-property 0 (length result) 'help-echo help-message result)
+    (put-text-property 0 (length result) 'journalctl--record record result)
     (concat result "\n")))
 
 (defun journalctl--get-line-record (&optional at-point)
