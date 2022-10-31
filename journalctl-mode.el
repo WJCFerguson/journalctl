@@ -99,6 +99,10 @@
   "Display faces by priority"
   :type '(alist :key-type number :value-type string))
 
+(defcustom journalctl-default-command
+  "journalctl -f "
+  "The default command to offer when executing `journalctl'")
+
 (defcustom journalctl-field-format-functions
   '(("PRIORITY" . journalctl--format-priority)
     ("__REALTIME_TIMESTAMP" . journalctl--format-timestamp)
@@ -126,18 +130,8 @@ Should be configured to have equal length"
 
 ;; ============================= End Customization =============================
 
-(defvar journalctl-program "journalctl"
-  "Path to the program used `journalctl'")
-
-(defvar journalctl-arguments '()
-  "Command-line arguments to pass to `journalctl-program'")
-
 (defvar journalctl--required-arguments '("--output=json")
   "Arguments non-negotiable for journalctl ")
-
-;; =================================== debug ===================================
-(setq journalctl-arguments '("-f" "-t" "flange"))
-;; ================================= end debug =================================
 
 (defvar-local journalctl--read-buffer ""
   "A read buffer for incoming message data so it can be parsed line-wise.")
@@ -297,16 +291,21 @@ This stores RECORD as `journalctl--record record' property on the line itself."
    comint-highlight-input nil))
 
 ;;;###autoload
-(defun journalctl ()
+(defun journalctl (command)
   "Browse journald logs inside Emacs."
-  (interactive)
-  ;; use apply to expand journalctl-arg
-  (let ((buffer-name (generate-new-buffer-name "*Journalctl*")))
+  ;; TODO: `transient' interface, but for now here's a foot-gun
+  (interactive
+   (list
+    (read-shell-command "Journalctl command: "
+                        journalctl-default-command nil)))
+  (let ((buffer-name (generate-new-buffer-name (format "*%s*" command)))
+        (split-command (split-string-shell-command (string-trim command))))
     (pop-to-buffer-same-window
      (apply 'make-comint-in-buffer "Journalctl"
             buffer-name
-            journalctl-program nil
-            (append journalctl-arguments journalctl--required-arguments))))
+            (car split-command) nil
+            (append (cdr split-command)
+                    journalctl--required-arguments))))
   (journalctl-mode))
 
 (provide 'journalctl-mode)
