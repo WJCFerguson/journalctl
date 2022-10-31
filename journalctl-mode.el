@@ -94,7 +94,7 @@ Should be configured to have equal length"
 
 ;; ============================= End Customization =============================
 
-(defvar journalctl-program (executable-find "journalctl")
+(defvar journalctl-program "journalctl"
   "Path to the program used `journalctl'")
 
 (defvar journalctl-arguments '()
@@ -169,17 +169,17 @@ falling back to simple string value display.
 (defun journalctl--filter-incoming (incoming)
   "Capture incoming JSON stream and buffer to read line-wise."
   (setq journalctl--read-buffer (concat journalctl--read-buffer incoming))
-  (let (output)
-    (while-let ((newline-pos (string-search "\n" journalctl--read-buffer))
-                (line (substring journalctl--read-buffer 0 newline-pos)))
-      (setq journalctl--read-buffer (substring journalctl--read-buffer (+ 1 newline-pos)))
-      (setq output
-            (concat
-             output
-             (condition-case err
-                 (journalctl--format-line (json-parse-string line))
-               ((json-parse-error json-readtable-error)
-                (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))))))
+  (let (output newline-pos)
+    (while (setq newline-pos (string-search "\n" journalctl--read-buffer))
+      (let ((line (substring journalctl--read-buffer 0 newline-pos)))
+        (setq journalctl--read-buffer (substring journalctl--read-buffer (+ 1 newline-pos)))
+        (setq output
+              (concat
+               output
+               (condition-case err
+                   (journalctl--format-line (json-parse-string line))
+                 ((json-parse-error json-readtable-error)
+                  (format  "ERROR: parse fail: %S\n\n%S\n\n" err line)))))))
     output))
 
 (defun journalctl--format-line (record)
