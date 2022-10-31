@@ -82,13 +82,13 @@ Should be configured to have equal length"
   :type '(alist :key-type number :value-type string))
 
 (defcustom journalctl-priority-faces
-  '((0 . 'compilation-error)
-    (1 . 'compilation-error)
-    (2 . 'compilation-error)
-    (3 . 'compilation-error)
-    (4 . 'compilation-warning)
-    (5 . 'compilation-warning)
-    (7 . 'shadow))
+  '((0 . error)
+    (1 . error)
+    (2 . error)
+    (3 . error)
+    (4 . warning)
+    (5 . warning)
+    (7 . shadow))
   "Display faces by priority"
   :type '(alist :key-type number :value-type string))
 
