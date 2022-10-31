@@ -138,7 +138,11 @@ Should be configured to have equal length"
 
 (defun journalctl--get-value (field-name record)
   "Return FIELD-NAME from RECORD"
-  (gethash field-name record))
+  ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
+  ;; flawed, e.g. when starting Node there are some failed characters vs text
+  ;; output.
+  (string-as-multibyte
+   (mapconcat #'byte-to-string (gethash field-name record) "")))
 
 (defun journalctl--priority-face (record &optional priority-num)
   "Return the priority-based face (if any) for RECORD.
