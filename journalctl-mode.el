@@ -210,7 +210,8 @@ falling back to simple string value display.
                (condition-case err
                    (journalctl--format-line (json-parse-string line))
                  ((json-parse-error json-readtable-error)
-                  (format  "ERROR: parse fail: %S\n\n%S\n\n" err line)))))))
+                  (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))
+                 (error (format "Failed to parse data: %S\n" line)))))))
     output))
 
 (defun journalctl--make-help-message (record)
