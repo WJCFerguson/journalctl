@@ -157,11 +157,12 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
 
 (defun journalctl--format-message (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
-  (let ((result (journalctl--get-value field-name record))
-        (face (or (journalctl--priority-face record)
-                  (and (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
-                       'journalctl-systemd-face))))
-    (propertize result 'face face)))
+  (let ((result (journalctl--get-value field-name record)))
+    (if-let (priority-face (journalctl--priority-face record))
+        (propertize result 'face priority-face))
+    (when (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
+      (add-face-text-property 0 (length result) 'journalctl-systemd-face t result))
+    result))
 
 (defun journalctl--format-priority (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
