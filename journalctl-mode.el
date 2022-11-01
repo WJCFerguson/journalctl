@@ -81,7 +81,7 @@
   "Face for timestamps.")
 
 (defface journalctl-source-face
-  '((t :inherit font-lock-keyword-face))
+  '((t :inherit font-lock-builtin-face))
   "Face for hosts in journalctl's output.")
 
 (defface journalctl-systemd-face
@@ -239,8 +239,8 @@ falling back to simple string value display.
                (condition-case err
                    (journalctl--format-line (json-parse-string line))
                  ((json-parse-error json-readtable-error)
-                  (format  "ERROR: parse fail: %S\n\n%S\n\n" err line))
-                 (error (format "Failed to parse data: %S\n" line)))))))
+                  (format  "ERROR: json parse error: %S\n\n%S\n\n" err line))
+                 (error (format "ERROR: Failed to parse data: %S\n\n%S\n\n" err line)))))))
     output))
 
 (defun journalctl--make-help-message (record)
@@ -294,7 +294,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
          (local-file (journalctl--get-value "CODE_FILE" record))
          (pathname (concat (file-remote-p default-directory) local-file)))
     (when (file-readable-p pathname)
-      ;; with M-. we're emulating xref, so allow us to jump back with M-,
+      ;; with M-. we're emulating xref so push marker for M-,
       (xref-push-marker-stack)
       (find-file pathname)
       (when-let ((line (journalctl--get-value "CODE_LINE" record)))
@@ -330,7 +330,11 @@ This stores RECORD as `journalctl--record record' property on the line itself."
    (list
     (read-shell-command "Journalctl command: "
                         journalctl-default-command nil)))
-  (let ((buffer-name (generate-new-buffer-name (format "*%s*" command)))
+  (let* ((remote-host (file-remote-p default-directory))
+         (buffer-name (generate-new-buffer-name
+                       (format "*%s%s*"
+                               (if remote-host (concat remote-host " ") "")
+                               command)))
         (split-command (split-string-shell-command (string-trim command))))
     (pop-to-buffer-same-window
      (apply 'make-comint-in-buffer "Journalctl"
