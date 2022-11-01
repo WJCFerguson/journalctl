@@ -77,7 +77,7 @@
   "Face for finished messages.")
 
 (defface journalctl-timestamp-face
-  '((t :inherit font-lock-type-face))
+  '((t :inherit font-lock-constant-face))
   "Face for timestamps.")
 
 (defface journalctl-source-face
@@ -85,7 +85,19 @@
   "Face for hosts in journalctl's output.")
 
 (defface journalctl-systemd-face
-  '((t :inherit highlight :weight bold))
+  '((default :weight bold))
+  "Face for messages from systemd")
+
+(defface journalctl-systemd-starting-face
+  '((default :weight bold)
+    (((class color) (min-colors 16) (background light)) :foreground "green4")
+    (((class color) (min-colors 16) (background dark))  :foreground "green1"))
+  "Face for messages from systemd")
+
+(defface journalctl-systemd-finishing-face
+  '((default :weight bold)
+    (((class color) (min-colors 16) (background light)) :foreground "red4")
+    (((class color) (min-colors 16) (background dark))  :foreground "red1"))
   "Face for messages from systemd")
 
 (defcustom journalctl-priority-faces
@@ -151,25 +163,38 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   (let ((priority-num (or priority-num
                           (string-to-number (journalctl--get-value "PRIORITY"
                                                                    record)))))
-    (or (alist-get priority-num journalctl-priority-faces)
-        (and (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
-         'journalctl-systemd-face))))
+    (alist-get priority-num journalctl-priority-faces)))
+
+(defun journalctl--add-face (str face &optional start end)
+  (if (get-text-property 0 'face str)
+      (or (add-face-text-property (or start 0) (or end (length str))
+                                  face
+                                  t ;; append
+                                  str)
+          str) ;; return str
+    (propertize str 'face face)))
 
 (defun journalctl--format-message (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
   (let ((result (journalctl--get-value field-name record)))
     (if-let (priority-face (journalctl--priority-face record))
-        (propertize result 'face priority-face))
+        (setq result (journalctl--add-face result priority-face)))
     (when (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
-      (add-face-text-property 0 (length result) 'journalctl-systemd-face t result))
+      (setq result (journalctl--add-face result 'journalctl-systemd-face))
+      (when (string-match "Start\\(ed\\|ing\\)" result)
+        (setq result (journalctl--add-face result 'journalctl-systemd-starting-face
+                                           (match-beginning 0) (match-end 0))))
+      (when (string-match "Stopp\\(ed\\|ing\\)" result)
+        (setq result (journalctl--add-face result 'journalctl-systemd-finishing-face
+                                           (match-beginning 0) (match-end 0)))))
     result))
 
 (defun journalctl--format-priority (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
   (let* ((value (journalctl--get-value field-name record))
          (priority-num (string-to-number value)))
-    (propertize (alist-get priority-num journalctl-priority-strings)
-                'face (journalctl--priority-face record priority-num))))
+    (journalctl--add-face (alist-get priority-num journalctl-priority-strings)
+                   (journalctl--priority-face record priority-num))))
 
 (defun journalctl--timestamp (record)
   "Return a cons of (seconds . microseconds) for a journald RECORD."
@@ -183,9 +208,8 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   "Returns PRIORITY field value for display"
   (let* ((timestamp (journalctl--timestamp record))
          (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
-    (propertize (concat display-time "."
-                        (format "%06d" (cdr timestamp)))
-                'face 'journalctl-timestamp-face)))
+    (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
+                   'journalctl-timestamp-face)))
 
 (defun journalctl--format-pid (field-name record)
   "Returns _PID field value for display"
@@ -231,8 +255,9 @@ falling back to simple string value display.
             (if file (format "\nSource: %s:%s"
                              file
                              (journalctl--get-value "CODE_LINE" record)))
-            "\nHost: " (journalctl--get-value "_HOSTNAME" record)
-            "\nPID: " (journalctl--get-value "_PID" record)
+            "\nHost  : " (journalctl--get-value "_HOSTNAME" record)
+            "\nUnit  : " unit
+            "\nPID   : " (journalctl--get-value "_PID" record)
             )))
 
 (defun journalctl--format-line (record)
@@ -241,8 +266,8 @@ falling back to simple string value display.
 This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((result (concat
                   (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
-                  (propertize (journalctl--format-field "SYSLOG_IDENTIFIER" record)
-                              'face 'journalctl-source-face)
+                  (journalctl--add-face (journalctl--format-field "SYSLOG_IDENTIFIER" record)
+                                 'journalctl-source-face)
                   " "
                   (journalctl--format-field "PRIORITY" record)
                   ":"))
