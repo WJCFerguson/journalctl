@@ -291,11 +291,12 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   "Jump to the source of the message if possible."
   (interactive)
   (let* ((record (journalctl--get-line-record))
-         (file (journalctl--get-value "CODE_FILE" record)))
-    (when (file-exists-p file)
+         (local-file (journalctl--get-value "CODE_FILE" record))
+         (pathname (concat (file-remote-p default-directory) local-file)))
+    (when (file-readable-p pathname)
       ;; with M-. we're emulating xref, so allow us to jump back with M-,
       (xref-push-marker-stack)
-      (find-file file)
+      (find-file pathname)
       (when-let ((line (journalctl--get-value "CODE_LINE" record)))
         (goto-line (string-to-number line))))))
 
