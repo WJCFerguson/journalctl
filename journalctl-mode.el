@@ -149,7 +149,19 @@ Should be configured to have equal length"
 
 ;; ============================= End Customization =============================
 
-(defvar journalctl--required-arguments '("--output=json")
+(defvar journalctl--required-arguments
+  '("--output=json"
+    "--output-fields=\
+CODE_FILE,\
+CODE_LINE,\
+MESSAGE,\
+PRIORITY,\
+SYSLOG_IDENTIFIER,\
+_HOSTNAME,\
+_PID,\
+_SYSTEMD_UNIT,\
+_SYSTEMD_USER_UNIT\
+")
   "Arguments non-negotiable for journalctl ")
 
 (defvar-local journalctl--read-buffer ""
@@ -327,6 +339,8 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   (setq-local
    ;; parse incoming JSON into text and a record
    comint-preoutput-filter-functions '(journalctl--filter-incoming)
+   ;; remove a comint function that may or may not be relevant
+   comint-output-filter-functions '(ansi-color-process-output comint-postoutput-scroll-to-bottom)
    ;; there is probably more we could disable in comint...
    comint-highlight-input nil))
 
