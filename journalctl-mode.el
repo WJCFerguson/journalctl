@@ -175,13 +175,13 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
     (alist-get priority-num journalctl-priority-faces)))
 
 (defun journalctl--add-face (str face &optional start end)
-  (if (get-text-property 0 'face str)
+  (if (get-text-property 0 'font-lock-face str)
       (or (add-face-text-property (or start 0) (or end (length str))
                                   face
                                   t ;; append
                                   str)
           str) ;; return str
-    (propertize str 'face face)))
+    (propertize str 'font-lock-face face)))
 
 (defun journalctl--format-message (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
@@ -323,7 +323,6 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   ;; body here.  Does the previous line make any sense?
 
   ;; we handle all the highlighting.  Or does this break
-  (font-lock-mode -1)
   (visual-line-mode)
   (setq-local
    ;; parse incoming JSON into text and a record
