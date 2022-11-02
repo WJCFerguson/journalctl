@@ -324,12 +324,15 @@ This stores RECORD as `journalctl--record record' property on the line itself."
 
 ;;;###autoload
 (defun journalctl (command)
-  "Browse journald logs inside Emacs."
+  "Browse journald logs inside Emacs.  With prefix ARG, allow editing command."
   ;; TODO: `transient' interface, but for now here's a foot-gun
   (interactive
    (list
     (read-shell-command "Journalctl command: "
-                        journalctl-default-command nil)))
+                        journalctl-default-command nil)
+    current-prefix-arg))
+  (when current-prefix-arg
+    (setq command (read-shell-command "Journalctl command: " command nil)))
   (let* ((remote-host (file-remote-p default-directory))
          (buffer-name (generate-new-buffer-name
                        (format "*%s%s*"
