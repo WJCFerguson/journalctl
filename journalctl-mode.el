@@ -53,52 +53,9 @@
 ;; =============================== Customization ===============================
 (defgroup journalctl nil
   "Journalctl browsing mode."
+  :group 'tools
   :group 'convenience
   :prefix "journalctl-")
-
-(defface journalctl-error-face
-  '((t :inherit error))
-  "Face for error messages.")
-
-(defface journalctl-warning-face
-  '((t :inherit warning))
-  "Face for warning messages.")
-
-(defface journalctl-debug-face
-  '((t :inherit shadow))
-  "Face for debug messages.")
-
-(defface journalctl-starting-face
-  '((t :inherit success))
-  "Face for starting messages.")
-
-(defface journalctl-finished-face
-  '((t :inherit success :bold t))
-  "Face for finished messages.")
-
-(defface journalctl-timestamp-face
-  '((t :inherit font-lock-constant-face))
-  "Face for timestamps.")
-
-(defface journalctl-source-face
-  '((t :inherit font-lock-builtin-face))
-  "Face for hosts in journalctl's output.")
-
-(defface journalctl-systemd-face
-  '((default :weight bold))
-  "Face for messages from systemd")
-
-(defface journalctl-systemd-starting-face
-  '((default :weight bold)
-    (((class color) (min-colors 16) (background light)) :foreground "green4")
-    (((class color) (min-colors 16) (background dark))  :foreground "green1"))
-  "Face for messages from systemd")
-
-(defface journalctl-systemd-finishing-face
-  '((default :weight bold)
-    (((class color) (min-colors 16) (background light)) :foreground "red4")
-    (((class color) (min-colors 16) (background dark))  :foreground "red1"))
-  "Face for messages from systemd")
 
 (defcustom journalctl-priority-faces
   '((0 . journalctl-error-face)
@@ -139,6 +96,56 @@ the parsed-json record."
 
 Should be configured to have equal length"
   :type '(alist :key-type number :value-type string))
+
+(defgroup journalctl-faces nil
+  "Display informations of the current line."
+  :group 'tools
+  :group 'convenience
+  :group 'journalctl)
+
+(defface journalctl-error-face
+  '((t :inherit error))
+  "Face for error messages."
+  :group 'journalctl-faces)
+
+(defface journalctl-warning-face
+  '((t :inherit warning))
+  "Face for warning messages."
+  :group 'journalctl-faces)
+
+(defface journalctl-debug-face
+  '((t :inherit shadow))
+  "Face for debug messages."
+  :group 'journalctl-faces)
+
+(defface journalctl-timestamp-face
+  '((t :inherit font-lock-constant-face))
+  "Face for timestamps."
+  :group 'journalctl-faces)
+
+(defface journalctl-source-face
+  '((t :inherit font-lock-builtin-face))
+  "Face for hosts in journalctl's output."
+  :group 'journalctl-faces)
+
+(defface journalctl-systemd-face
+  '((default :weight bold))
+  "Face for messages from systemd"
+  :group 'journalctl-faces)
+
+(defface journalctl-systemd-starting-face
+  '((default :weight bold)
+    (((class color) (min-colors 16) (background light)) :foreground "green4")
+    (((class color) (min-colors 16) (background dark))  :foreground "green1"))
+  "Face for messages from systemd"
+  :group 'journalctl-faces)
+
+(defface journalctl-systemd-finishing-face
+  '((default :weight bold)
+    (((class color) (min-colors 16) (background light)) :foreground "red4")
+    (((class color) (min-colors 16) (background dark))  :foreground "red1"))
+  "Face for messages from systemd"
+  :group 'journalctl-faces)
 
 ;; ============================= End Customization =============================
 
