@@ -68,10 +68,6 @@
   "Display faces by priority"
   :type '(alist :key-type number :value-type string))
 
-(defcustom journalctl-default-command
-  "journalctl -f "
-  "The default command to offer when executing `journalctl'")
-
 (defcustom journalctl-field-format-functions
   '(("PRIORITY" . journalctl--format-priority)
     ("__REALTIME_TIMESTAMP" . journalctl--format-timestamp)
@@ -148,6 +144,9 @@ Should be configured to have equal length"
   :group 'journalctl-faces)
 
 ;; ============================= End Customization =============================
+
+(defvar journalctl-history (make-list 1 "journalctl --priority=info --follow ")
+  "History list for journalctl.")
 
 (defvar journalctl--required-arguments
   '("--output=json"
@@ -350,11 +349,10 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   ;; TODO: `transient' interface, but for now here's a foot-gun
   (interactive
    (list
-    (read-shell-command "Journalctl command: "
-                        journalctl-default-command nil)
+    (read-shell-command "Journalctl command: " (car journalctl-history) 'journalctl-history)
     current-prefix-arg))
   (when current-prefix-arg
-    (setq command (read-shell-command "Journalctl command: " command nil)))
+    (setq command (read-shell-command "Journalctl command: " command 'journalctl-history)))
   (let* ((remote-host (file-remote-p default-directory))
          (buffer-name (generate-new-buffer-name
                        (format "*%s%s*"
