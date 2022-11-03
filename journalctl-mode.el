@@ -227,7 +227,7 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
 (defun journalctl--format-timestamp (field-name record)
   "Returns PRIORITY field value for display"
   (let* ((timestamp (journalctl--timestamp record))
-         (display-time (format-time-string "%b %d %H:%M:%S" (car timestamp))))
+         (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
     (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
                    'journalctl-timestamp-face)))
 
@@ -266,7 +266,7 @@ falling back to simple string value display.
 (defun journalctl--make-help-message (record)
   "Return a help message for help-echo on the printed line for RECORD."
   (let* ((timestamp (journalctl--timestamp record))
-         (timestr (format (format-time-string "%a %F %H:%M:%S.%%06d %p %Z" (car timestamp))
+         (timestr (format (format-time-string "%Y-%m-%d %H:%M:%S.%%06d %p %Z" (car timestamp))
                            (cdr timestamp)))
          (file (journalctl--get-value "CODE_FILE" record))
          (unit (or (journalctl--get-value "_SYSTEMD_USER_UNIT" record)
