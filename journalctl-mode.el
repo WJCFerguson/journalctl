@@ -297,15 +297,17 @@ This stores RECORD as `journalctl--record record' property on the line itself."
                          (propertize
                           (journalctl--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
-                          'line-prefix message-prefix)))
-    (put-text-property 0 (length result) 'help-echo help-message result)
-    (put-text-property 0 (length result) 'journalctl--record record result)
+                          'line-prefix message-prefix
+                          'help-echo help-message)))
+    (put-text-property 0 1 'journalctl--record record result)
     (concat result "\n")))
 
 (defun journalctl--get-line-record (&optional at-point)
   "Get the parsed record from the current line, or AT-POINT if set."
-  (let ((at-point (or at-point (point))))
-    (get-text-property at-point 'journalctl--record)))
+  (save-excursion
+    (when at-point (goto-char at-point))
+    (beginning-of-line)
+    (get-text-property (point) 'journalctl--record)))
 
 (defun journalctl-jump-to-line-source ()
   "Jump to the source of the message if possible."
