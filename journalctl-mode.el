@@ -80,14 +80,14 @@ the parsed-json record."
   :type '(alist :key-type string :value-type function))
 
 (defcustom journalctl-priority-strings
-  '((0 . "!")
-    (1 . "A")
-    (2 . "C")
-    (3 . "E")
-    (4 . "W")
-    (5 . "N")
-    (6 . "I")
-    (7 . "D"))
+'((0 . "EMERG")
+  (1 . "ALERT")
+  (2 . "CRIT ")
+  (3 . "ERROR")
+  (4 . "WARN ")
+  (5 . "NOTE ")
+  (6 . "INFO ")
+  (7 . "DEBUG"))
   "Display strings for various priorities.
 
 Should be configured to have equal length"
@@ -286,11 +286,10 @@ falling back to simple string value display.
 This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((result (concat
                   (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
+                  (journalctl--format-field "PRIORITY" record) " "
                   (journalctl--add-face (journalctl--format-field "SYSLOG_IDENTIFIER" record)
-                                 'journalctl-source-face)
-                  " "
-                  (journalctl--format-field "PRIORITY" record)
-                  ":"))
+                                        'journalctl-source-face)
+                  " "))
          (help-message (journalctl--make-help-message record))
          (message-prefix (make-string (length result) ?\ )))
     (setq result (concat result
