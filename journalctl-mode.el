@@ -305,8 +305,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   "Get the parsed record from the current line, or AT-POINT if set."
   (save-excursion
     (when at-point (goto-char at-point))
-    (beginning-of-line)
-    (get-text-property (point) 'journalctl--record)))
+    (get-text-property (pos-bol) 'journalctl--record)))
 
 (defun journalctl-jump-to-line-source ()
   "Jump to the source of the message if possible."
