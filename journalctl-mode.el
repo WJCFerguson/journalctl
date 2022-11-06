@@ -80,14 +80,14 @@ the parsed-json record."
   :type '(alist :key-type string :value-type function))
 
 (defcustom journalctl-priority-strings
-'((0 . "EMERG")
-  (1 . "ALERT")
-  (2 . "CRIT ")
-  (3 . "ERROR")
-  (4 . "WARN ")
-  (5 . "NOTE ")
-  (6 . "INFO ")
-  (7 . "DEBUG"))
+  '((0 . "EMERG")
+    (1 . "ALERT")
+    (2 . "CRIT ")
+    (3 . "ERROR")
+    (4 . "WARN ")
+    (5 . "NOTE ")
+    (6 . "INFO ")
+    (7 . "DEBUG"))
   "Display strings for various priorities.
 
 Should be configured to have equal length"
@@ -186,27 +186,25 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
     (alist-get priority-num journalctl-priority-faces)))
 
 (defun journalctl--add-face (str face &optional start end)
-  (if (get-text-property 0 'font-lock-face str)
-      (or (add-face-text-property (or start 0) (or end (length str))
-                                  face
-                                  t ;; append
-                                  str)
-          str) ;; return str
-    (propertize str 'font-lock-face face)))
+  "Set FACE on STR (optionally on sub-string from START to END)."
+  (set-text-properties (or start 0) (or end (length str))
+                       (list 'font-lock-face face)
+                       str)
+  str)
 
 (defun journalctl--format-message (field-name record)
   "Returns FIELD_NAME from RECORD for display as a priority level."
   (let ((result (journalctl--get-value field-name record)))
     (if-let (priority-face (journalctl--priority-face record))
-        (setq result (journalctl--add-face result priority-face)))
+        (journalctl--add-face result priority-face))
     (when (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
-      (setq result (journalctl--add-face result 'journalctl-systemd-face))
+      (journalctl--add-face result 'journalctl-systemd-face)
       (when (string-match "Start\\(ed\\|ing\\)" result)
-        (setq result (journalctl--add-face result 'journalctl-systemd-starting-face
-                                           (match-beginning 0) (match-end 0))))
+        (journalctl--add-face result 'journalctl-systemd-starting-face
+                              (match-beginning 0) (match-end 0)))
       (when (string-match "Stopp\\(ed\\|ing\\)" result)
-        (setq result (journalctl--add-face result 'journalctl-systemd-finishing-face
-                                           (match-beginning 0) (match-end 0)))))
+        (journalctl--add-face result 'journalctl-systemd-finishing-face
+                              (match-beginning 0) (match-end 0))))
     result))
 
 (defun journalctl--format-priority (field-name record)
@@ -214,7 +212,7 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   (let* ((value (journalctl--get-value field-name record))
          (priority-num (string-to-number value)))
     (journalctl--add-face (alist-get priority-num journalctl-priority-strings)
-                   (journalctl--priority-face record priority-num))))
+                          (journalctl--priority-face record priority-num))))
 
 (defun journalctl--timestamp (record)
   "Return a cons of (seconds . microseconds) for a journald RECORD."
@@ -229,14 +227,14 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   (let* ((timestamp (journalctl--timestamp record))
          (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
     (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
-                   'journalctl-timestamp-face)))
+                          'journalctl-timestamp-face)))
 
 (defun journalctl--format-pid (field-name record)
   "Returns _PID field value for display"
   (format "[%s]" (journalctl--get-value field-name record)))
 
 (defun journalctl--format-field (field-name record)
-    "Format FIELD_NAME from RECORD for display.
+  "Format FIELD_NAME from RECORD for display.
 
 Finds format function from alist `journalctl-field-dformat-functions
 falling back to simple string value display.
@@ -267,7 +265,7 @@ falling back to simple string value display.
   "Return a help message for help-echo on the printed line for RECORD."
   (let* ((timestamp (journalctl--timestamp record))
          (timestr (format (format-time-string "%Y-%m-%d %H:%M:%S.%%06d %p %Z" (car timestamp))
-                           (cdr timestamp)))
+                          (cdr timestamp)))
          (file (journalctl--get-value "CODE_FILE" record))
          (unit (or (journalctl--get-value "_SYSTEMD_USER_UNIT" record)
                    (journalctl--get-value "_SYSTEMD_UNIT" record))))
@@ -287,8 +285,9 @@ This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((result (concat
                   (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
                   (journalctl--format-field "PRIORITY" record) " "
-                  (journalctl--add-face (journalctl--format-field "SYSLOG_IDENTIFIER" record)
-                                        'journalctl-source-face)
+                  (journalctl--add-face
+                   (format "%-20s"(journalctl--format-field "SYSLOG_IDENTIFIER" record))
+                   'journalctl-source-face)
                   " "))
          (help-message (journalctl--make-help-message record))
          (message-prefix (make-string (length result) ?\ )))
@@ -358,7 +357,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
                        (format "*%s%s*"
                                (if remote-host (concat remote-host " ") "")
                                command)))
-        (split-command (split-string-shell-command (string-trim command))))
+         (split-command (split-string-shell-command (string-trim command))))
     (pop-to-buffer-same-window
      (apply 'make-comint-in-buffer "Journalctl"
             buffer-name
