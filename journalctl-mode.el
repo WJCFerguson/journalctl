@@ -1,6 +1,6 @@
 ;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022  James Ferguson
+;; Copyright (C) 2022 James Ferguson
 
 ;; Author: James Ferguson <james@faff.org>
 ;; Keywords: lisp
@@ -10,49 +10,55 @@
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
-
+;;
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
-
+;;
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
+;;
 ;; This is a major-mode for Emacs to view journald logs in Emacs.
 ;;
-;; It derives from comint-mode to give the typical facilities of viewing command
-;; output, but augmented.
+;; It should be an analogous but enhanced experience to running journalctl via
+;; `shell-command'.  As such it leaves the buffer writeable, so you
+;; add/remove/annotate as you wish.
+;;
+;; Launch with command `journalctl'.
 ;;
 ;;;; Example Installation
 ;;
 ;; (use-package journalctl-mode
 ;;  :bind ("C-c j" . journalctl))
-;;
+
 ;;;; Features:
 ;;
 ;; * prettified output
-;; * toggle-able follow (-f) mode
 ;; * TODO
 ;;
-;; Key bindings
-;; * TODO
-;;
+;; Mode map bindings:
+;; * "M-."      - Jump to the source of the message if possible, `xref' style.
+;; * "C-c C-c"  - kill the current journalctl process
+
 ;;;; Tips/Tricks
 ;;
-;; * Don't forget good old regex highlighting ... M-s h (r|l)' (also from isearch)
+;; * Don't forget good old `highlight-regexp' - 'M-s h (r|l)' (incl. from
+;;   isearch)
 ;;
-;; xref integration (?)
+;; * `highlight-symbol-nav-mode' does a great job of jumping to next/prev of
+;;   symbol under cursor (e.g. the journalctl identifier)
 ;;
+
 ;;; Code:
 
 (require 'xref)
 
 ;; =============================== Customization ===============================
 (defgroup journalctl nil
-  "Journalctl browsing mode."
+  "Journald log browsing mode."
   :group 'tools
   :group 'convenience
   :prefix "journalctl-")
@@ -146,7 +152,7 @@ Should be configured to have equal length"
 ;; ============================= End Customization =============================
 
 (defvar journalctl-history (make-list 1 "journalctl --priority=info --follow ")
-  "History list for journalctl.")
+  "History list for journalctl commands.")
 
 (defvar journalctl--required-arguments
   '("--output=json"
@@ -163,8 +169,15 @@ _SYSTEMD_USER_UNIT\
 ")
   "Arguments non-negotiable for journalctl ")
 
-(defvar-local journalctl--read-buffer ""
-  "A read buffer for incoming message data so it can be parsed line-wise.")
+(defvar-local journalctl--process nil
+  "Journalctl process")
+
+(defun journalctl--kill-process ()
+  "Kill a running journalctl process and its buffer."
+  (interactive)
+  (when (and journalctl--process (process-live-p journalctl--process))
+    (kill-process journalctl--process))
+  (setq journalctl--process nil))
 
 (defun journalctl--get-value (field-name record)
   "Return FIELD-NAME from RECORD"
@@ -244,22 +257,81 @@ falling back to simple string value display.
            field-name
            record))
 
-(defun journalctl--filter-incoming (incoming)
-  "Capture incoming JSON stream and buffer to read line-wise."
-  (setq journalctl--read-buffer (concat journalctl--read-buffer incoming))
-  (let (output newline-pos)
-    (while (setq newline-pos (string-search "\n" journalctl--read-buffer))
-      (let ((line (substring journalctl--read-buffer 0 newline-pos)))
-        (setq journalctl--read-buffer (substring journalctl--read-buffer (+ 1 newline-pos)))
-        (setq output
-              (concat
-               output
-               (condition-case err
-                   (journalctl--format-line (json-parse-string line))
-                 ((json-parse-error json-readtable-error)
-                  (format  "ERROR: json parse error: %S\n\n%S\n\n" err line))
-                 (error (format "ERROR: Failed to parse data: %S\n\n%S\n\n" err line)))))))
-    output))
+(defun journalctl--mode-line-process ()
+  "Set the process info in the mode-line"
+  (setq mode-line-process (if journalctl--process " running" " done")))
+
+(defvar-local journalctl--target-buffer nil
+  "In a process buffer, the journalctl-mode target buffer for insertion.")
+
+(defun journalctl--make-process (command)
+  "Start journalctl COMMAND."
+  (let ((target-buffer (current-buffer))
+        (split-command (split-string-shell-command (string-trim command))))
+    (setq journalctl--process
+          (make-process :name command
+                        :buffer (generate-new-buffer-name (concat " *Process: " command "*"))
+                        :command (append split-command journalctl--required-arguments)
+                        :filter 'journalctl--filter-incoming
+                        :sentinel 'journalctl--process-sentinel))
+    (with-current-buffer (process-buffer journalctl--process)
+      (setq-local journalctl--target-buffer target-buffer))
+    (add-hook 'kill-buffer-hook 'journalctl--kill-process)
+    (journalctl--mode-line-process)))
+
+(defvar-local journalctl--parse-timer nil
+  "The timer to parse incoming json")
+
+(defun journalctl--filter-incoming (process incoming)
+  "Detect incoming JSON to ensure it will be parsed."
+  (when (buffer-name (process-buffer process))
+    (with-current-buffer (process-buffer process)
+      (insert incoming)
+      (journalctl--parse-incoming (current-buffer)))))
+
+(defun journalctl--parse-incoming (buffer)
+  "Parse complete JSON lines in the process BUFFER; insert to target buffer."
+  (when journalctl--parse-timer
+    (cancel-timer journalctl--parse-timer)
+    (setq journalctl--parse-timer nil))
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let (output newline-pos)
+        ;; while we find newlines, extract and parse the line and insert it into
+        ;; the target buffer.
+        (while (setq newline-pos (search-forward "\n" nil t))
+          (let ((line (delete-and-extract-region (point-min) newline-pos)))
+            (setq output
+                  (concat
+                   output
+                   (condition-case err
+                       (journalctl--format-line (json-parse-string line))
+                     ((json-parse-error json-readtable-error)
+                      (format  "ERROR: json parse error: %S\n\n%S\n\n" err line))
+                     (error (format "ERROR: Failed to parse data: %S\n\n%S\n\n" err line)))))))
+        ;; put output into the target buffer
+        (when output
+          (with-current-buffer journalctl--target-buffer
+            (let ((return-end (eq (point) (point-max))))
+              (save-excursion
+                (widen)
+                (goto-char (point-max)) ;; TODO: should be a marker, right
+                (undo-boundary)         ;; info for timers says to do this
+                (insert output)
+                (undo-boundary))
+              (when return-end
+                (goto-char (point-max))))))))))
+
+(defun journalctl--process-sentinel (process event-description)
+  "Sentinel function for a journalctl process"
+  ;; flush buffer
+  (when (process-buffer process)
+    (journalctl--parse-incoming (process-buffer process)))
+  ;; if process complete; kill process buffer
+  (when (not (and (process-live-p process) (buffer-name (process-buffer process))))
+    (kill-buffer (process-buffer process)))
+  (journalctl--mode-line-process))
 
 (defun journalctl--make-help-message (record)
   "Return a help message for help-echo on the printed line for RECORD."
@@ -320,51 +392,40 @@ This stores RECORD as `journalctl--record record' property on the line itself."
         (goto-line (string-to-number line))))))
 
 (defvar journalctl-mode-map
-  (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
+  (let ((map (make-sparse-keymap)))
     ;; example definition
     (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
+    (define-key map (kbd "C-c C-c") 'journalctl--kill-process)
     map)
   "Basic mode map for `journalctl'")
 
-(define-derived-mode journalctl-mode comint-mode "Journalctl"
+(define-derived-mode journalctl-mode fundamental-mode "journalctl"
   "Major mode for `run-journalctl'.
 
 \\{journalctl-mode-map}"
-  ;; body here.  Does the previous line make any sense?
-
-  ;; we handle all the highlighting.  Or does this break
-  (visual-line-mode)
-  (setq-local
-   ;; parse incoming JSON into text and a record
-   comint-preoutput-filter-functions '(journalctl--filter-incoming)
-   ;; remove a comint function that may or may not be relevant
-   comint-output-filter-functions '(ansi-color-process-output comint-postoutput-scroll-to-bottom)
-   ;; there is probably more we could disable in comint...
-   comint-highlight-input nil))
+  ;; highlight-symbol, and its nav mode, are highly useful.  Is this too
+  ;; opinionated to include?:
+  (when (featurep 'highlight-symbol)
+    (highlight-symbol-mode)
+    (highlight-symbol-nav-mode))
+  ;; visual-line makes sense for messages to flow nicely
+  (visual-line-mode))
 
 ;;;###autoload
 (defun journalctl (command)
   "Browse journald logs inside Emacs.  With prefix ARG, allow editing command."
-  ;; TODO: `transient' interface, but for now here's a foot-gun
   (interactive
    (list
     (read-shell-command "Journalctl command: " (car journalctl-history) 'journalctl-history)
     current-prefix-arg))
   (when current-prefix-arg
     (setq command (read-shell-command "Journalctl command: " command 'journalctl-history)))
-  (let* ((remote-host (file-remote-p default-directory))
-         (buffer-name (generate-new-buffer-name
-                       (format "*%s%s*"
-                               (if remote-host (concat remote-host " ") "")
-                               command)))
-         (split-command (split-string-shell-command (string-trim command))))
-    (pop-to-buffer-same-window
-     (apply 'make-comint-in-buffer "Journalctl"
-            buffer-name
-            (car split-command) nil
-            (append (cdr split-command)
-                    journalctl--required-arguments))))
-  (journalctl-mode))
+  (let ((remote-host (file-remote-p default-directory)))
+    (pop-to-buffer (generate-new-buffer
+                    (concat "*" remote-host (and remote-host " ") command "*"))))
+  (journalctl-mode)
+  (journalctl--make-process command)
+  (goto-char (point-max)))
 
 (provide 'journalctl-mode)
 ;;; journalctl-mode.el ends here
