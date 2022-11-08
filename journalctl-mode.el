@@ -194,12 +194,14 @@ _SYSTEMD_USER_UNIT\
 (defun journalctl--get-value (field-name record)
   "Return the value for FIELD-NAME from RECORD."
   (let ((msg (gethash field-name record)))
-    (if (vectorp msg)
-        ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
-        ;; flawed, e.g. when starting Node there are some failed characters vs text
-        ;; output.
-        (string-as-multibyte (mapconcat #'byte-to-string (gethash field-name record) ""))
-      msg)))
+    (cond
+     ((vectorp msg)
+      ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
+      ;; flawed, e.g. when starting Node there are some failed characters vs text
+      ;; output.
+      (string-as-multibyte (mapconcat #'byte-to-string (gethash field-name record) "")))
+     ((eq msg ':null) "")
+     (t msg))))
 
 (defun journalctl--priority-face (record &optional priority-num)
   "Return the priority-based face (if any) for RECORD at PRIORITY-NUM.
