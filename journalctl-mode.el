@@ -64,14 +64,14 @@
   :prefix "journalctl-")
 
 (defcustom journalctl-priority-faces
-  '((0 . journalctl-error-face)
-    (1 . journalctl-error-face)
-    (2 . journalctl-error-face)
+  '((0 . journalctl-critical-face)
+    (1 . journalctl-critical-face)
+    (2 . journalctl-critical-face)
     (3 . journalctl-error-face)
     (4 . journalctl-warning-face)
     (5 . journalctl-warning-face)
     (7 . journalctl-debug-face))
-  "Display faces by priority"
+  "Faces for messages by journald priority level"
   :type '(alist :key-type number :value-type string))
 
 (defcustom journalctl-field-format-functions
@@ -104,6 +104,15 @@ Should be configured to have equal length"
   :group 'tools
   :group 'convenience
   :group 'journalctl)
+
+(defface journalctl-critical-face
+  '((((min-colors 88) (background dark))
+     (:background "yellow1" :foreground "black"))
+    (((background dark)) (:background "yellow" :foreground "black"))
+    (((min-colors 88)) (:background "yellow1"))
+    (t (:background "yellow")))
+  "Face for critical or higher."
+  :group 'journalctl-faces)
 
 (defface journalctl-error-face
   '((t :inherit error))
