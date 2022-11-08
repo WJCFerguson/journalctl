@@ -179,7 +179,10 @@ _SYSTEMD_USER_UNIT\
   "Arguments non-negotiable for journalctl ")
 
 (defvar-local journalctl--process nil
-  "Journalctl process")
+  "Set in a journalctl-mode buffer, holds the running journalctl process")
+
+(defvar-local journalctl--target-buffer nil
+  "Set in a process buffer indicates the journalctl-mode buffer for insertion.")
 
 (defun journalctl--kill-process ()
   "Kill a running journalctl process and its buffer."
@@ -189,19 +192,19 @@ _SYSTEMD_USER_UNIT\
   (setq journalctl--process nil))
 
 (defun journalctl--get-value (field-name record)
-  "Return FIELD-NAME from RECORD"
-  ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
-  ;; flawed, e.g. when starting Node there are some failed characters vs text
-  ;; output.
+  "Return the value for FIELD-NAME from RECORD."
   (let ((msg (gethash field-name record)))
     (if (vectorp msg)
+        ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
+        ;; flawed, e.g. when starting Node there are some failed characters vs text
+        ;; output.
         (string-as-multibyte (mapconcat #'byte-to-string (gethash field-name record) ""))
       msg)))
 
 (defun journalctl--priority-face (record &optional priority-num)
-  "Return the priority-based face (if any) for RECORD.
+  "Return the priority-based face (if any) for RECORD at PRIORITY-NUM.
 
-If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
+If PRIORITY-NUM is nil its value will be fetched from RECORD."
   (let ((priority-num (or priority-num
                           (string-to-number (journalctl--get-value "PRIORITY"
                                                                    record)))))
@@ -215,7 +218,7 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   str)
 
 (defun journalctl--format-message (field-name record)
-  "Returns FIELD_NAME from RECORD for display as a priority level."
+  "Return formatted string for FIELD-NAME from RECORD."
   (let ((result (journalctl--get-value field-name record)))
     (if-let (priority-face (journalctl--priority-face record))
         (journalctl--add-face result priority-face))
@@ -230,23 +233,26 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
     result))
 
 (defun journalctl--format-priority (field-name record)
-  "Returns FIELD_NAME from RECORD for display as a priority level."
+  "Returns value for FIELD_NAME from RECORD colored by priority level."
   (let* ((value (journalctl--get-value field-name record))
          (priority-num (string-to-number value)))
     (journalctl--add-face (alist-get priority-num journalctl-priority-strings)
                           (journalctl--priority-face record priority-num))))
 
-(defun journalctl--timestamp (record)
-  "Return a cons of (seconds . microseconds) for a journald RECORD."
-  (let* ((timestr (journalctl--get-value "__REALTIME_TIMESTAMP" record))
+(defun journalctl--timestamp (record &optional field-name)
+  "Return a timestamp cons of (seconds . microseconds) for a journald RECORD.
+
+FIELD-NAME defaults to __REALTIME_TIMESTAMP."
+  (let* ((timestr (journalctl--get-value (or field-name "__REALTIME_TIMESTAMP")
+                                         record))
          (len (length timestr))
          (seconds (string-to-number (substring timestr 0 (- len 6))))
          (microseconds (string-to-number (substring timestr (- len 6) len))))
     (cons seconds microseconds)))
 
-(defun journalctl--format-timestamp (field-name record)
-  "Returns PRIORITY field value for display"
-  (let* ((timestamp (journalctl--timestamp record))
+(defun journalctl--format-timestamp (field-name &optional record)
+  "Returns timestamp string for display from FIELD-NAME in RECORD."
+  (let* ((timestamp (journalctl--timestamp record field-name))
          (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
     (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
                           'journalctl-timestamp-face)))
@@ -259,22 +265,17 @@ If PRIORITY-NUM is supplied, it will not be fetched again from RECORD."
   "Format FIELD_NAME from RECORD for display.
 
 Finds format function from alist `journalctl-field-dformat-functions
-falling back to simple string value display.
-"
-  (funcall (alist-get field-name journalctl-field-format-functions
-                      'journalctl--get-value nil 'string-equal)
-           field-name
-           record))
+falling back to simple string value display."
+  (let ((format-function (alist-get field-name journalctl-field-format-functions
+                                    'journalctl--get-value nil 'string-equal)))
+    (funcall format-function field-name record)))
 
-(defun journalctl--mode-line-process ()
+(defun journalctl--set-mode-line-process ()
   "Set the process info in the mode-line"
   (setq mode-line-process (if journalctl--process " running" " done")))
 
-(defvar-local journalctl--target-buffer nil
-  "In a process buffer, the journalctl-mode target buffer for insertion.")
-
 (defun journalctl--make-process (command)
-  "Start journalctl COMMAND."
+  "Start journalctl COMMAND to be rendered to current journalctl-mode buffer."
   (let ((target-buffer (current-buffer))
         (split-command (split-string-shell-command (string-trim command))))
     (setq journalctl--process
@@ -286,24 +287,18 @@ falling back to simple string value display.
     (with-current-buffer (process-buffer journalctl--process)
       (setq-local journalctl--target-buffer target-buffer))
     (add-hook 'kill-buffer-hook 'journalctl--kill-process)
-    (journalctl--mode-line-process)))
-
-(defvar-local journalctl--parse-timer nil
-  "The timer to parse incoming json")
+    (journalctl--set-mode-line-process)))
 
 (defun journalctl--filter-incoming (process incoming)
-  "Detect incoming JSON to ensure it will be parsed."
+  "Process filter function receiving JSON from journalctl; triggers parsing."
   (when (buffer-name (process-buffer process))
     (with-current-buffer (process-buffer process)
       (insert incoming)
-      (journalctl--parse-incoming (current-buffer)))))
+      (journalctl--flush-json (current-buffer)))))
 
-(defun journalctl--parse-incoming (buffer)
-  "Parse complete JSON lines in the process BUFFER; insert to target buffer."
-  (when journalctl--parse-timer
-    (cancel-timer journalctl--parse-timer)
-    (setq journalctl--parse-timer nil))
-  (with-current-buffer buffer
+(defun journalctl--flush-json (process-buffer)
+  "Parse JSON found in PROCESS-BUFFER and insert to its journalctl--target-buffer."
+  (with-current-buffer process-buffer
     (save-excursion
       (goto-char (point-min))
       (let (output newline-pos)
@@ -327,20 +322,20 @@ falling back to simple string value display.
                 (widen)
                 (goto-char (point-max)) ;; TODO: should be a marker, right
                 (undo-boundary)         ;; info for timers says to do this
-                (insert output)
+                (let ((pre-insert-point (point)))
+                  (insert output)
+                  (ansi-color-filter-region pre-insert-point (point)))
                 (undo-boundary))
               (when return-end
                 (goto-char (point-max))))))))))
 
 (defun journalctl--process-sentinel (process event-description)
-  "Sentinel function for a journalctl process"
-  ;; flush buffer
+  "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
   (when (process-buffer process)
-    (journalctl--parse-incoming (process-buffer process)))
-  ;; if process complete; kill process buffer
+    (journalctl--flush-json (process-buffer process)))
   (when (not (and (process-live-p process) (buffer-name (process-buffer process))))
     (kill-buffer (process-buffer process)))
-  (journalctl--mode-line-process))
+  (journalctl--set-mode-line-process))
 
 (defun journalctl--make-help-message (record)
   "Return a help message for help-echo on the printed line for RECORD."
@@ -382,13 +377,13 @@ This stores RECORD as `journalctl--record record' property on the line itself."
     (concat result "\n")))
 
 (defun journalctl--get-line-record (&optional at-point)
-  "Get the parsed record from the current line, or AT-POINT if set."
+  "Fetch the parsed json record for the line a (or AT-POINT (point))."
   (save-excursion
     (when at-point (goto-char at-point))
     (get-text-property (pos-bol) 'journalctl--record)))
 
 (defun journalctl-jump-to-line-source ()
-  "Jump to the source of the message if possible."
+  "Jump to the source of the message at point, if possible."
   (interactive)
   (let* ((record (journalctl--get-line-record))
          (local-file (journalctl--get-value "CODE_FILE" record))
@@ -406,10 +401,10 @@ This stores RECORD as `journalctl--record record' property on the line itself."
     (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
     (define-key map (kbd "C-c C-c") 'journalctl--kill-process)
     map)
-  "Basic mode map for `journalctl'")
+  "Basic mode map for `journalctl-mode'")
 
 (define-derived-mode journalctl-mode fundamental-mode "journalctl"
-  "Major mode for `run-journalctl'.
+  "Major mode for browsing journald records with `journalctl'.
 
 \\{journalctl-mode-map}"
   ;; highlight-symbol, and its nav mode, are highly useful.  Is this too
@@ -422,7 +417,9 @@ This stores RECORD as `journalctl--record record' property on the line itself."
 
 ;;;###autoload
 (defun journalctl (command)
-  "Browse journald logs inside Emacs.  With prefix ARG, allow editing command."
+  "Browse journald logs inside Emacs.
+
+With COMMAND and with prefix ARG, prompt for editing the command."
   (interactive
    (list
     (read-shell-command "Journalctl command: " (car journalctl-history) 'journalctl-history)
