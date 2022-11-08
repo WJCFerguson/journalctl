@@ -276,14 +276,19 @@ falling back to simple string value display."
 
 (defun journalctl--make-process (command)
   "Start journalctl COMMAND to be rendered to current journalctl-mode buffer."
-  (let ((target-buffer (current-buffer))
-        (split-command (split-string-shell-command (string-trim command))))
+  (let* ((target-buffer (current-buffer))
+         (split-command (split-string-shell-command (string-trim command)))
+         (file-handler (find-file-name-handler default-directory 'make-process))
+         (make-process-args
+          (list ':name command
+                ':buffer (generate-new-buffer-name (concat " *Process: " command "*"))
+                ':command (append split-command journalctl--required-arguments)
+                ':filter 'journalctl--filter-incoming
+                ':sentinel 'journalctl--process-sentinel)))
     (setq journalctl--process
-          (make-process :name command
-                        :buffer (generate-new-buffer-name (concat " *Process: " command "*"))
-                        :command (append split-command journalctl--required-arguments)
-                        :filter 'journalctl--filter-incoming
-                        :sentinel 'journalctl--process-sentinel))
+          (if file-handler
+              (apply file-handler 'make-process make-process-args)
+            (apply 'make-process make-process-args)))
     (with-current-buffer (process-buffer journalctl--process)
       (setq-local journalctl--target-buffer target-buffer))
     (add-hook 'kill-buffer-hook 'journalctl--kill-process)
