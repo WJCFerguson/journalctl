@@ -289,7 +289,8 @@ falling back to simple string value display."
             (apply 'make-process make-process-args)))
     (set-process-plist journalctl--process
                        (list 'partial-input ""
-                             'target-buffer target-buffer))
+                             'target-buffer target-buffer
+                             'start-time (float-time)))
     (add-hook 'kill-buffer-hook 'journalctl--kill-process)
     (journalctl--set-mode-line-process)))
 
@@ -335,6 +336,7 @@ falling back to simple string value display."
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
   (journalctl--flush-json process)
   (if (not (process-live-p process))
+      (message "Process took %.2fs" (- (float-time) (process-get process 'start-time)))
       (let ((target-buffer (process-get process 'target-buffer)))
         (when (buffer-live-p target-buffer)
           (with-current-buffer target-buffer
