@@ -182,9 +182,6 @@ _SYSTEMD_USER_UNIT\
 (defvar-local journalctl--process nil
   "Set in a journalctl-mode buffer, holds the running journalctl process.")
 
-(defvar-local journalctl--target-buffer nil
-  "Set in a process buffer indicates the journalctl-mode buffer for insertion.")
-
 (defun journalctl--kill-process ()
   "Kill a running journalctl process and its buffer."
   (interactive)
@@ -274,7 +271,7 @@ falling back to simple string value display."
     (funcall format-function field-name record)))
 
 (defun journalctl--set-mode-line-process ()
-  "Set the process info in the mode-line."
+  "Set the `mode-line-process' for process info in the mode-line."
   (setq mode-line-process (if journalctl--process " running" " done")))
 
 (defun journalctl--make-process (command)
@@ -284,7 +281,6 @@ falling back to simple string value display."
          (file-handler (find-file-name-handler default-directory 'make-process))
          (make-process-args
           (list ':name command
-                ':buffer (generate-new-buffer-name (concat " *Process: " command "*"))
                 ':command (append split-command journalctl--required-arguments)
                 ':filter 'journalctl--filter-incoming
                 ':sentinel 'journalctl--process-sentinel)))
@@ -292,58 +288,59 @@ falling back to simple string value display."
           (if file-handler
               (apply file-handler 'make-process make-process-args)
             (apply 'make-process make-process-args)))
-    (with-current-buffer (process-buffer journalctl--process)
-      (setq-local journalctl--target-buffer target-buffer))
+    (set-process-plist journalctl--process
+                       (list 'partial-input ""
+                             'target-buffer target-buffer))
     (add-hook 'kill-buffer-hook 'journalctl--kill-process)
     (journalctl--set-mode-line-process)))
 
 (defun journalctl--filter-incoming (process incoming)
   "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
-  (when (buffer-name (process-buffer process))
-    (with-current-buffer (process-buffer process)
-      (insert incoming)
-      (journalctl--flush-json (current-buffer)))))
+  (process-put process 'partial-input (concat (process-get process 'partial-input) incoming))
+  (journalctl--flush-json process))
 
-(defun journalctl--flush-json (process-buffer)
-  "Parse JSON found in PROCESS-BUFFER and insert to its journalctl--target-buffer."
-  (with-current-buffer process-buffer
-    (save-excursion
-      (goto-char (point-min))
-      (let (output newline-pos)
-        ;; while we find newlines, extract and parse the line and insert it into
-        ;; the target buffer.
-        (while (setq newline-pos (search-forward "\n" nil t))
-          (let ((line (delete-and-extract-region (point-min) newline-pos)))
-            (setq output
-                  (concat
-                   output
-                   (condition-case err
-                       (journalctl--format-line (json-parse-string line))
-                     ((json-parse-error json-readtable-error)
-                      (format  "ERROR: json parse error: %S\n\n%S\n\n" err line))
-                     (error (format "ERROR: Failed to parse data: %S\n\n%S\n\n" err line)))))))
-        ;; put output into the target buffer
-        (when output
-          (with-current-buffer journalctl--target-buffer
-            (let ((return-end (eq (point) (point-max))))
-              (save-excursion
-                (widen)
-                (goto-char (point-max)) ;; TODO: should be a marker, right
-                (undo-boundary)         ;; info for timers says to do this
-                (let ((pre-insert-point (point)))
-                  (insert output)
-                  (ansi-color-filter-region pre-insert-point (point)))
-                (undo-boundary))
-              (when return-end
-                (goto-char (point-max))))))))))
+(defun journalctl--flush-json (process)
+  "Parse any complete json lines received from PROCESS and format into buffer."
+  (let ((json-lines (process-get process 'partial-input))
+        (target-buffer (process-get process 'target-buffer))
+        output)
+    (process-put process 'partial-input "")
+    (dolist (line (string-lines json-lines t t))
+      (if (not (string-suffix-p "\n" line))
+          (process-put process 'partial-input line) ;; incomplete final line
+        (setq output
+              (concat
+               output
+               (condition-case err
+                   (journalctl--format-line (json-parse-string line))
+                 ((json-parse-error json-readtable-error)
+                  (format  "ERROR: json parse error: %S\n\n%S\n\n" err line))
+                 (error (format "ERROR: Failed to parse data: %S\n\n%S\n\n" err line)))))))
+    (if (not (buffer-live-p target-buffer))
+        (when (process-live-p process) (kill-process process))
+      (when output
+        (with-current-buffer target-buffer
+          (let ((return-end (eq (point) (point-max))))
+            (save-excursion
+              (widen)
+              (goto-char (point-max)) ;; TODO: should be a marker, right
+              (undo-boundary)         ;; info for timers says to do this
+              (let ((pre-insert-point (point)))
+                (insert output)
+                (ansi-color-filter-region pre-insert-point (point)))
+              (undo-boundary))
+            (when return-end
+              (goto-char (point-max)))))))))
 
 (defun journalctl--process-sentinel (process _event-description)
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
-  (when (process-buffer process)
-    (journalctl--flush-json (process-buffer process)))
-  (when (not (and (process-live-p process) (buffer-name (process-buffer process))))
-    (kill-buffer (process-buffer process)))
-  (journalctl--set-mode-line-process))
+  (journalctl--flush-json process)
+  (if (not (process-live-p process))
+      (let ((target-buffer (process-get process 'target-buffer)))
+        (when (buffer-live-p target-buffer)
+          (with-current-buffer target-buffer
+            (setq journalctl--process nil)
+            (journalctl--set-mode-line-process))))))
 
 (defun journalctl--make-help-message (record)
   "Return a help message for help-echo on the printed line for RECORD."
