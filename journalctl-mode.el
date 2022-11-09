@@ -34,14 +34,12 @@
 ;; (use-package journalctl-mode
 ;;  :bind ("C-c j" . journalctl))
 
-;;;; Features:
+;;;; Features and bindings:
 ;;
-;; * prettified output
-;; * TODO
-;;
-;; Mode map bindings:
+;; * prettified output like -o short-precise but with priority level displayed
+;;   and ISO-esque timestamps in the same format used by --until etc.
 ;; * "M-."      - Jump to the source of the message if possible, `xref' style.
-;; * "C-c C-c"  - kill the current journalctl process
+;; * "C-c C-c"  - kill the current journalctl process, like with `comint'
 
 ;;;; Tips/Tricks
 ;;
@@ -343,9 +341,10 @@ falling back to simple string value display."
             (setq journalctl--process nil)
             (journalctl--set-mode-line-process))))))
 
-(defun journalctl--make-help-message (record)
-  "Return a help message for help-echo on the printed line for RECORD."
-  (let* ((timestamp (journalctl--timestamp record))
+(defun journalctl--make-help-message (_window _object pos)
+  "Return a help message for help-echo on the printed line at POS."
+  (let* ((record (journalctl--get-line-record pos))
+         (timestamp (journalctl--timestamp record))
          (timestr (format (format-time-string "%Y-%m-%d %H:%M:%S.%%06d %p %Z" (car timestamp))
                           (cdr timestamp)))
          (file (journalctl--get-value "CODE_FILE" record))
@@ -357,8 +356,7 @@ falling back to simple string value display."
                              (journalctl--get-value "CODE_LINE" record)))
             "\nHost  : " (journalctl--get-value "_HOSTNAME" record)
             "\nUnit  : " unit
-            "\nPID   : " (journalctl--get-value "_PID" record)
-            )))
+            "\nPID   : " (journalctl--get-value "_PID" record))))
 
 (defun journalctl--format-line (record)
   "Return journald RECORD formatted as a propertized text line.
@@ -371,14 +369,13 @@ This stores RECORD as `journalctl--record record' property on the line itself."
                    (format "%-20s"(journalctl--format-field "SYSLOG_IDENTIFIER" record))
                    'journalctl-source-face)
                   " "))
-         (help-message (journalctl--make-help-message record))
          (message-prefix (make-string (length result) ?\ )))
     (setq result (concat result
                          (propertize
                           (journalctl--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
                           'line-prefix message-prefix
-                          'help-echo help-message)))
+                          'help-echo 'journalctl--make-help-message)))
     (put-text-property 0 1 'journalctl--record record result)
     (concat result "\n")))
 
