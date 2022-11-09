@@ -180,6 +180,15 @@ _SYSTEMD_USER_UNIT\
 (defvar-local journalctl--process nil
   "Set in a journalctl-mode buffer, holds the running journalctl process.")
 
+(defvar-local journalctl--flush-timer nil
+  "Timer for the flush function.")
+
+(defconst journalctl--max-json-buffer-size 100000
+  "Size of the buffer for incoming JSON data before triggering a parse.")
+
+(defconst journalctl--max-json-buffer-time 0.1
+  "Maximum age of buffer for incoming JSON data before triggering a parse.")
+
 (defun journalctl--kill-process ()
   "Kill a running journalctl process and its buffer."
   (interactive)
@@ -296,18 +305,33 @@ falling back to simple string value display."
 
 (defun journalctl--filter-incoming (process incoming)
   "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
-  (process-put process 'partial-input (concat (process-get process 'partial-input) incoming))
-  (journalctl--flush-json process))
+  (let ((unparsed (concat (process-get process 'partial-input) incoming)))
+    (process-put process 'partial-input unparsed)
+    ;; if we have a lot pending, have it parse, otherwise make sure it's parsed
+    ;; soon.  End of process will also trigger a flush.
+    (if (> (length unparsed) journalctl--max-json-buffer-size)
+        (journalctl--flush-json process)
+      (unless journalctl--flush-timer
+        (setq journalctl--flush-timer
+              (run-with-timer journalctl--max-json-buffer-time nil
+                              'journalctl--flush-json process))))))
+
+(defun journalctl--clear-timer ()
+  "Clear the flush-json timer."
+  (when journalctl--flush-timer
+    (cancel-timer journalctl--flush-timer)
+    (setq journalctl--flush-timer nil)))
 
 (defun journalctl--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
+  (journalctl--clear-timer)
   (let ((json-lines (process-get process 'partial-input))
         (target-buffer (process-get process 'target-buffer))
         output)
     (process-put process 'partial-input "")
     (dolist (line (string-lines json-lines t t))
       (if (not (string-suffix-p "\n" line))
-          (process-put process 'partial-input line) ;; incomplete final line
+          (process-put process 'partial-input line) ;; incomplete line
         (setq output
               (concat
                output
@@ -336,7 +360,8 @@ falling back to simple string value display."
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
   (journalctl--flush-json process)
   (if (not (process-live-p process))
-      (message "Process took %.2fs" (- (float-time) (process-get process 'start-time)))
+      (message "Journalctl process took %.2fs"
+               (- (float-time) (process-get process 'start-time)))
       (let ((target-buffer (process-get process 'target-buffer)))
         (when (buffer-live-p target-buffer)
           (with-current-buffer target-buffer
