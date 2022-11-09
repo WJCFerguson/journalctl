@@ -45,7 +45,7 @@
 
 ;;;; Tips/Tricks
 ;;
-;; * Don't forget good old `highlight-regexp' - 'M-s h (r|l)' (incl. from
+;; * Don't forget good old `highlight-regexp' - 'M-s h (r|l)' (including from
 ;;   isearch)
 ;;
 ;; * `highlight-symbol-nav-mode' does a great job of jumping to next/prev of
@@ -55,6 +55,7 @@
 ;;; Code:
 
 (require 'xref)
+(require 'ansi-color)
 
 ;; =============================== Customization ===============================
 (defgroup journalctl nil
@@ -71,7 +72,7 @@
     (4 . journalctl-warning-face)
     (5 . journalctl-warning-face)
     (7 . journalctl-debug-face))
-  "Faces for messages by journald priority level"
+  "Faces for messages by journald priority level."
   :type '(alist :key-type number :value-type string))
 
 (defcustom journalctl-field-format-functions
@@ -141,21 +142,21 @@ Should be configured to have equal length"
 
 (defface journalctl-systemd-face
   '((default :weight bold))
-  "Face for messages from systemd"
+  "Face for messages from systemd."
   :group 'journalctl-faces)
 
 (defface journalctl-systemd-starting-face
   '((default :weight bold)
     (((class color) (min-colors 16) (background light)) :foreground "green4")
     (((class color) (min-colors 16) (background dark))  :foreground "green1"))
-  "Face for messages from systemd"
+  "Face for messages from systemd."
   :group 'journalctl-faces)
 
 (defface journalctl-systemd-finishing-face
   '((default :weight bold)
     (((class color) (min-colors 16) (background light)) :foreground "red4")
     (((class color) (min-colors 16) (background dark))  :foreground "red1"))
-  "Face for messages from systemd"
+  "Face for messages from systemd."
   :group 'journalctl-faces)
 
 ;; ============================= End Customization =============================
@@ -176,10 +177,10 @@ _PID,\
 _SYSTEMD_UNIT,\
 _SYSTEMD_USER_UNIT\
 ")
-  "Arguments non-negotiable for journalctl ")
+  "Arguments non-negotiable for journalctl.")
 
 (defvar-local journalctl--process nil
-  "Set in a journalctl-mode buffer, holds the running journalctl process")
+  "Set in a journalctl-mode buffer, holds the running journalctl process.")
 
 (defvar-local journalctl--target-buffer nil
   "Set in a process buffer indicates the journalctl-mode buffer for insertion.")
@@ -199,7 +200,7 @@ _SYSTEMD_USER_UNIT\
       ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
       ;; flawed, e.g. when starting Node there are some failed characters vs text
       ;; output.
-      (string-as-multibyte (mapconcat #'byte-to-string (gethash field-name record) "")))
+      (decode-coding-string (mapconcat #'byte-to-string (gethash field-name record) "") 'utf-8))
      ((eq msg ':null) "")
      (t msg))))
 
@@ -235,7 +236,7 @@ If PRIORITY-NUM is nil its value will be fetched from RECORD."
     result))
 
 (defun journalctl--format-priority (field-name record)
-  "Returns value for FIELD_NAME from RECORD colored by priority level."
+  "Return value for FIELD-NAME from RECORD colored by priority level."
   (let* ((value (journalctl--get-value field-name record))
          (priority-num (string-to-number value)))
     (journalctl--add-face (alist-get priority-num journalctl-priority-strings)
@@ -253,18 +254,18 @@ FIELD-NAME defaults to __REALTIME_TIMESTAMP."
     (cons seconds microseconds)))
 
 (defun journalctl--format-timestamp (field-name &optional record)
-  "Returns timestamp string for display from FIELD-NAME in RECORD."
+  "Return timestamp string for display from FIELD-NAME in RECORD."
   (let* ((timestamp (journalctl--timestamp record field-name))
          (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
     (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
                           'journalctl-timestamp-face)))
 
 (defun journalctl--format-pid (field-name record)
-  "Returns _PID field value for display"
+  "Return FIELD-NAME from RECORD formatted as _PID."
   (format "[%s]" (journalctl--get-value field-name record)))
 
 (defun journalctl--format-field (field-name record)
-  "Format FIELD_NAME from RECORD for display.
+  "Format FIELD-NAME from RECORD for display.
 
 Finds format function from alist `journalctl-field-dformat-functions
 falling back to simple string value display."
@@ -273,7 +274,7 @@ falling back to simple string value display."
     (funcall format-function field-name record)))
 
 (defun journalctl--set-mode-line-process ()
-  "Set the process info in the mode-line"
+  "Set the process info in the mode-line."
   (setq mode-line-process (if journalctl--process " running" " done")))
 
 (defun journalctl--make-process (command)
@@ -297,7 +298,7 @@ falling back to simple string value display."
     (journalctl--set-mode-line-process)))
 
 (defun journalctl--filter-incoming (process incoming)
-  "Process filter function receiving JSON from journalctl; triggers parsing."
+  "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
   (when (buffer-name (process-buffer process))
     (with-current-buffer (process-buffer process)
       (insert incoming)
@@ -336,7 +337,7 @@ falling back to simple string value display."
               (when return-end
                 (goto-char (point-max))))))))))
 
-(defun journalctl--process-sentinel (process event-description)
+(defun journalctl--process-sentinel (process _event-description)
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
   (when (process-buffer process)
     (journalctl--flush-json (process-buffer process)))
@@ -400,7 +401,8 @@ This stores RECORD as `journalctl--record record' property on the line itself."
       (xref-push-marker-stack)
       (find-file pathname)
       (when-let ((line (journalctl--get-value "CODE_LINE" record)))
-        (goto-line (string-to-number line))))))
+        (goto-char (point-min))
+        (forward-line (1- (string-to-number line)))))))
 
 (defvar journalctl-mode-map
   (let ((map (make-sparse-keymap)))
@@ -408,7 +410,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
     (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
     (define-key map (kbd "C-c C-c") 'journalctl--kill-process)
     map)
-  "Basic mode map for `journalctl-mode'")
+  "Basic mode map for `journalctl-mode'.")
 
 (define-derived-mode journalctl-mode fundamental-mode "journalctl"
   "Major mode for browsing journald records with `journalctl'.
