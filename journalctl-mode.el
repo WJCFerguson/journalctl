@@ -282,6 +282,7 @@ falling back to simple string value display."
          (make-process-args
           (list ':name command
                 ':command (append split-command journalctl--required-arguments)
+                ':noquery t
                 ':filter 'journalctl--filter-incoming
                 ':sentinel 'journalctl--process-sentinel)))
     (setq journalctl--process
