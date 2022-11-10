@@ -284,7 +284,7 @@ falling back to simple string value display."
 (defun journalctl--make-process (command)
   "Start journalctl COMMAND to be rendered to current journalctl-mode buffer."
   (let* ((target-buffer (current-buffer))
-         (split-command (split-string-shell-command (string-trim command)))
+         (split-command (split-string-and-unquote (string-trim command)))
          (file-handler (find-file-name-handler default-directory 'make-process))
          (make-process-args
           (list ':name command
