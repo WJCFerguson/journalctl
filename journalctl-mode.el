@@ -307,11 +307,12 @@ falling back to simple string value display."
   "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
   (let ((unparsed (concat (process-get process 'partial-input) incoming)))
     (process-put process 'partial-input unparsed)
-    ;; if we have a lot pending, have it parse, otherwise make sure it's parsed
-    ;; soon.  End of process will also trigger a flush.
+    ;; if we have a lot pending, have it parse, otherwise set a timer to make
+    ;; sure it will be parsed promptly.  End of process will also trigger a flush.
     (if (> (length unparsed) journalctl--max-json-buffer-size)
         (journalctl--flush-json process)
-      (unless journalctl--flush-timer
+      ;; unless the timer is set
+      (unless (and journalctl--flush-timer (memq journalctl--flush-timer timer-list))
         (setq journalctl--flush-timer
               (run-with-timer journalctl--max-json-buffer-time nil
                               'journalctl--flush-json process))))))
