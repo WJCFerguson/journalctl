@@ -164,6 +164,7 @@ Should be configured to have equal length"
 
 (defvar journalctl--required-arguments
   '("--output=json"
+    "--all"
     "--output-fields=\
 CODE_FILE,\
 CODE_LINE,\
