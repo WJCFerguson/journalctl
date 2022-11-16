@@ -427,10 +427,25 @@ This stores RECORD as `journalctl--record record' property on the line itself."
         (goto-char (point-min))
         (forward-line (1- (string-to-number line)))))))
 
+(defun journalctl-full-message ()
+  "Fetch the full journalctl message at point into a buffer"
+  (interactive)
+  (let* ((record (journalctl--get-line-record))
+         (command-root (format
+                        "journalctl --quiet --cursor='%s' --lines=1 --output "
+                        (gethash "__CURSOR" record))))
+    (shell-command
+     (concat "echo -e '\njournal message with --output json-pretty:\n';"
+             command-root "json-pretty;"
+             "echo -e 'journal message with --output short-precise:\n';"
+             command-root "short-precise;"
+             " &"))))
+
 (defvar journalctl-mode-map
   (let ((map (make-sparse-keymap)))
     ;; example definition
     (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
+    (define-key map (kbd "C-c C-o") 'journalctl-full-message)
     (define-key map (kbd "C-c C-c") 'journalctl--kill-process)
     map)
   "Basic mode map for `journalctl-mode'.")
