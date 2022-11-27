@@ -183,6 +183,9 @@ _SYSTEMD_USER_UNIT\
 (defvar-local journalctl--process nil
   "Set in a journalctl-mode buffer, holds the running journalctl process.")
 
+(defvar-local journalctl--primary-commandline nil
+  "The command line the process was launched with")
+
 (defvar-local journalctl--flush-timer nil
   "Timer for the flush function.")
 
@@ -267,12 +270,16 @@ FIELD-NAME defaults to __REALTIME_TIMESTAMP."
          (microseconds (string-to-number (substring timestr (- len 6) len))))
     (cons seconds microseconds)))
 
-(defun journalctl--format-timestamp (field-name &optional record)
+(defun journalctl--extract-timestamp (field-name &optional record)
   "Return timestamp string for display from FIELD-NAME in RECORD."
   (let* ((timestamp (journalctl--timestamp record field-name))
          (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
-    (journalctl--add-face (concat display-time "." (format "%06d" (cdr timestamp)))
-                          'journalctl-timestamp-face)))
+    (concat display-time "." (format "%06d" (cdr timestamp)))))
+
+(defun journalctl--format-timestamp (field-name &optional record)
+  "Return face-annotated timestamp string for display from FIELD-NAME in RECORD."
+  (journalctl--add-face (journalctl--extract-timestamp field-name record)
+                        'journalctl-timestamp-face))
 
 (defun journalctl--format-pid (field-name record)
   "Return FIELD-NAME from RECORD formatted as _PID."
@@ -289,15 +296,20 @@ falling back to simple string value display."
 
 (defun journalctl--set-mode-line-process ()
   "Set the `mode-line-process' for process info in the mode-line."
-  (setq mode-line-process (if journalctl--process " running" " done")))
+  (setq mode-line-process (if journalctl--process " running" " done"))
+  (force-mode-line-update))
 
 (defun journalctl--make-process (command)
-  "Start journalctl COMMAND to be rendered to current journalctl-mode buffer."
+  "Start journalctl COMMAND to be rendered to current journalctl-mode buffer.
+
+COMMAND may be a string or a list of string arguments."
   (let* ((target-buffer (current-buffer))
-         (split-command (split-string-and-unquote (string-trim command)))
+         (split-command (if (stringp command)
+                            (split-string-and-unquote (string-trim command))
+                          command))
          (file-handler (find-file-name-handler default-directory 'make-process))
          (make-process-args
-          (list ':name command
+          (list ':name (if (stringp command) command (combine-and-quote-strings command))
                 ':command (append split-command journalctl--required-arguments)
                 ':noquery t
                 ':filter 'journalctl--filter-incoming
@@ -410,12 +422,12 @@ bear this in mind."
   (journalctl--flush-json process)
   (if (not (process-live-p process))
       (message "Journalctl process took %.2fs"
-               (- (float-time) (process-get process 'start-time)))
-      (let ((target-buffer (process-get process 'target-buffer)))
-        (when (buffer-live-p target-buffer)
-          (with-current-buffer target-buffer
-            (setq journalctl--process nil)
-            (journalctl--set-mode-line-process))))))
+               (- (float-time) (process-get process 'start-time))))
+  (let ((target-buffer (process-get process 'target-buffer)))
+    (when (buffer-live-p target-buffer)
+      (with-current-buffer target-buffer
+        (setq journalctl--process nil)
+        (journalctl--set-mode-line-process)))))
 
 (defun journalctl--make-help-message (_window _object pos)
   "Return a help message for help-echo on the printed line at POS."
@@ -495,6 +507,38 @@ This stores RECORD as `journalctl--record record' property on the line itself."
              command-root "short-precise;"
              " &"))))
 
+(defun journalctl-follow (&optional command)
+  "(Re) run COMMAND (or orig command of buffer) with --follow.
+
+Starts from the last line of the current buffer
+
+WARNING: no line limit."
+  (interactive)
+  (if journalctl--process
+      (error "Process already running")
+    (journalctl--make-process
+     (append
+      ;; command with since, until & lines removed
+      (let ((delete-next nil))
+        (seq-filter (lambda (x)
+                      (cond
+                       (delete-next
+                        (setq delete-next nil))
+                       ((string-match "^-\\([SUn]\\|-since\\|-until\\|-lines\\)$" x)
+                        (setq delete-next t)
+                        nil)
+                       ((string-match "^--\\(since\\|until\\|lines\\)=" x)
+                        nil)
+                       (t t)))
+                    (split-string-shell-command (or command
+                                                    journalctl--primary-commandline))))
+      ;; add follow args
+      (list "--follow"
+            "--since"
+            (journalctl--extract-timestamp
+             "__REALTIME_TIMESTAMP"
+             (journalctl--get-line-record (point-max))))))))
+
 (defvar journalctl-mode-map
   (let ((map (make-sparse-keymap)))
     ;; example definition
@@ -531,6 +575,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
     (pop-to-buffer (generate-new-buffer
                     (concat "*" remote-host (and remote-host " ") command "*"))))
   (journalctl-mode)
+  (setq-local journalctl--primary-commandline (string-trim command))
   (journalctl--make-process command)
   (goto-char (point-max)))
 
