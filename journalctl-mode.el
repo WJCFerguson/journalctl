@@ -307,7 +307,7 @@ COMMAND may be a string or a list of string arguments."
       (error "Process already running")
     (let* ((target-buffer (current-buffer))
            (split-command (if (stringp command)
-                              (split-string-and-unquote (string-trim command))
+                              (split-string-shell-command (string-trim command))
                             command))
            (file-handler (find-file-name-handler default-directory 'make-process))
            (make-process-args
