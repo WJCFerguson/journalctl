@@ -1,6 +1,6 @@
 ;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2022 James Ferguson
+;; Copyright (C) 2023 James Ferguson
 
 ;; Author: James Ferguson <james@faff.org>
 ;; Keywords: lisp
@@ -21,25 +21,49 @@
 
 ;;; Commentary:
 ;;
-;; This is a major-mode for Emacs to view journald logs in Emacs.
+;; This is an Emacs major-mode for viewing and `--follow'ing journald logs.
 ;;
 ;; It should be an analogous but enhanced experience to running journalctl via
 ;; `shell-command'.  As such it leaves the buffer writeable, so you
 ;; add/remove/annotate as you wish.
+;;
+;; Note: At present it does not offer a rich UI for journalctl command
+;; composition.  Enabling `bash-completion.el' or similar will help
+;; significantly.  It has been developed to a useful, but not highly polished,
+;; state.
+;;
+;; It allows multiple interleaved journalctl process output, including multiple
+;; running simultaneously, with the output interleaved by timestamp.  So for
+;; instance one process may run a broad query at high priority level (e.g
+;; --priority warning), while another runs a more focused query at a lower level
+;; (--priority info|debug on a more narrow target).  Additional processes may be
+;; added at any time, so for instance around a warning or error message, info or
+;; debug lines may be inserted.
 ;;
 ;; Launch with command `journalctl'.
 ;;
 ;;;; Example Installation
 ;;
 ;; (use-package journalctl-mode
-;;  :bind ("C-c j" . journalctl))
+;;  :bind ("C-c C-j" . journalctl))
 
 ;;;; Features and bindings:
 ;;
 ;; * prettified output like -o short-precise but with priority level displayed
 ;;   and ISO-esque timestamps in the same format used by --until etc.
-;; * "M-."      - Jump to the source of the message if possible, `xref' style.
-;; * "C-c C-c"  - kill the current journalctl process, like with `comint'
+;;
+;; * "M-."  - Jump to the source of the message if possible, `xref' style.
+;;
+;; * "C-c C-o" - open another buffer, showing the entire journal record at point
+;;
+;; * "C-c C-j" - add an additional process.  If region is active, a `--since' /
+;;               `--until' string will be added to the kill ring corresponding
+;;               to the selected record lines, so it can be inserted into the
+;;               journalctl query command
+;;
+;; * "C-c C-c" - kill the current journalctl processes, like with `comint'
+;;
+;; * "C-c C-f" - start/restart the original query with --follow
 
 ;;;; Tips/Tricks
 ;;
@@ -508,14 +532,14 @@ This stores RECORD as `jcm--record record' property on the line itself."
                         "journalctl --quiet --cursor='%s' --lines=1 --output "
                         (gethash "__CURSOR" record))))
     (shell-command
-     (concat "echo -e '\njournal message with --output json-pretty:\n';"
+     (concat "echo -e 'journal message with --output json-pretty:\n';"
              command-root "json-pretty;"
-             "echo -e 'journal message with --output short-precise:\n';"
+             "echo -e '\n\njournal message with --output short-precise:\n';"
              command-root "short-precise;"
              " &"))))
 
 (defun jcm-follow (&optional command)
-  "(Re) run COMMAND (or orig command of buffer) with --follow.
+  "(Re) run the original command of the buffer with --follow.
 
 Starts from the last line of the current buffer
 
