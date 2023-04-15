@@ -487,13 +487,18 @@ This stores RECORD as `jcm--record record' property on the line itself."
   (let* ((record (jcm--get-line-record))
          (local-file (jcm--get-value "CODE_FILE" record))
          (pathname (concat (file-remote-p default-directory) local-file)))
-    (when (and local-file (file-readable-p pathname))
+    (cond
+     ((not local-file)
+      (error "Log record does not include a 'CODE_FILE' entry"))
+     ((not (file-readable-p pathname))
+      (error "Log record source file '%s' not readable" pathname))
+     (t
       ;; with M-. we're emulating xref so push marker for M-,
       (xref-push-marker-stack)
       (find-file pathname)
       (when-let ((line (jcm--get-value "CODE_LINE" record)))
         (goto-char (point-min))
-        (forward-line (1- (string-to-number line)))))))
+        (forward-line (1- (string-to-number line))))))))
 
 (defun jcm-full-message ()
   "Fetch the full journalctl message at point into a buffer."
