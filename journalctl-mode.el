@@ -180,14 +180,11 @@ _SYSTEMD_USER_UNIT\
 ")
   "Arguments non-negotiable for journalctl.")
 
-(defvar-local jcm--process nil
-  "Set in a jcm-mode buffer, holds the running journalctl process.")
+(defvar-local jcm--processes nil
+  "Set in a jcm-mode buffer, holds the running journalctl processes.")
 
 (defvar-local jcm--primary-commandline nil
-  "The command line the process was launched with")
-
-(defvar-local jcm--flush-timer nil
-  "Timer for the flush function.")
+  "The command line the process was launched with.")
 
 (defconst jcm--max-json-buffer-size 100000
   "Size of the buffer for incoming JSON data before triggering a parse.")
@@ -195,12 +192,12 @@ _SYSTEMD_USER_UNIT\
 (defconst jcm--max-json-buffer-time 0.1
   "Maximum age of buffer for incoming JSON data before triggering a parse.")
 
-(defun jcm--kill-process ()
-  "Kill a running journalctl process and its buffer."
+(defun jcm--kill-processes ()
+  "Kill all running journalctl processes."
   (interactive)
-  (when (and jcm--process (process-live-p jcm--process))
-    (kill-process jcm--process))
-  (setq jcm--process nil))
+  (dolist (proc jcm--processes)
+    (when (and proc (process-live-p proc))
+      (kill-process proc))))
 
 (defun jcm--get-value (field-name record)
   "Return the value for FIELD-NAME from RECORD."
@@ -296,57 +293,60 @@ falling back to simple string value display."
 
 (defun jcm--set-mode-line-process ()
   "Set the `mode-line-process' for process info in the mode-line."
-  (setq mode-line-process (if jcm--process " running" " done"))
+  (setq mode-line-process (if jcm--processes
+                              (concat " running"
+                                      (if (> (length jcm--processes) 1)
+                                          (format " (%d)" (length jcm--processes))))
+                            " done"))
   (force-mode-line-update))
 
 (defun jcm--make-process (command)
   "Start journalctl COMMAND to be rendered to current jcm-mode buffer.
 
 COMMAND may be a string or a list of string arguments."
-  (if jcm--process
-      (error "Process already running")
-    (let* ((target-buffer (current-buffer))
-           (split-command (if (stringp command)
-                              (split-string-shell-command (string-trim command))
-                            command))
-           (file-handler (find-file-name-handler default-directory 'make-process))
-           (make-process-args
-            (list ':name (if (stringp command) command (combine-and-quote-strings command))
-                  ':command (append split-command jcm--required-arguments)
-                  ':noquery t
-                  ':filter 'jcm--filter-incoming
-                  ':sentinel 'jcm--process-sentinel)))
-      (setq jcm--process
-            (if file-handler
-                (apply file-handler 'make-process make-process-args)
-              (apply 'make-process make-process-args)))
-      (set-process-plist jcm--process
-                         (list 'partial-input ""
-                               'target-buffer target-buffer
-                               'start-time (float-time)
-                               'insertion-marker (set-marker (make-marker) (point-max))))
-      (add-hook 'kill-buffer-hook 'jcm--kill-process)
-      (jcm--set-mode-line-process))))
+  (let* ((target-buffer (current-buffer))
+         (split-command (if (stringp command)
+                            (split-string-shell-command (string-trim command))
+                          command))
+         (file-handler (find-file-name-handler default-directory 'make-process))
+         (make-process-args
+          (list ':name (if (stringp command) command (combine-and-quote-strings command))
+                ':command (append split-command jcm--required-arguments)
+                ':noquery t
+                ':filter 'jcm--filter-incoming
+                ':sentinel 'jcm--process-sentinel))
+         (new-process (if file-handler
+                          (apply file-handler 'make-process make-process-args)
+                        (apply 'make-process make-process-args))))
+    (set-process-plist new-process
+                       (list 'partial-input ""
+                             'target-buffer target-buffer
+                             'start-time (float-time)
+                             'insertion-marker (set-marker (make-marker) (point-max))))
+    (setq jcm--processes (cons new-process jcm--processes))
+    (jcm--set-mode-line-process)))
 
 (defun jcm--filter-incoming (process incoming)
   "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
-  (let ((unparsed (concat (process-get process 'partial-input) incoming)))
+  (let ((unparsed (concat (process-get process 'partial-input) incoming))
+        (flush-timer (process-get process 'flush-timer)))
     (process-put process 'partial-input unparsed)
     ;; if we have a lot pending, have it parse, otherwise set a timer to make
     ;; sure it will be parsed promptly.  End of process will also trigger a flush.
     (if (> (length unparsed) jcm--max-json-buffer-size)
         (jcm--flush-json process)
       ;; unless the timer is set
-      (unless (and jcm--flush-timer (memq jcm--flush-timer timer-list))
-        (setq jcm--flush-timer
-              (run-with-timer jcm--max-json-buffer-time nil
-                              'jcm--flush-json process))))))
+      (unless (and flush-timer (memq flush-timer timer-list))
+        (process-put process
+                     'flush-timer
+                     (run-with-timer jcm--max-json-buffer-time nil
+                                     'jcm--flush-json process))))))
 
-(defun jcm--clear-timer ()
-  "Clear the flush-json timer."
-  (when jcm--flush-timer
-    (cancel-timer jcm--flush-timer)
-    (setq jcm--flush-timer nil)))
+(defun jcm--clear-timer (process)
+  "Clear the flush-json timer for PROCESS."
+  (when-let ((flush-timer (process-get process 'flush-timer)))
+    (cancel-timer flush-timer)
+    (process-put process 'flush-timer nil)))
 
 (defun jcm--goto-insertion-point (process record)
   "Go to the insertion point for RECORD generated by PROCESS.
@@ -399,7 +399,7 @@ bear this in mind."
 
 (defun jcm--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
-  (jcm--clear-timer)
+  (jcm--clear-timer process)
   (let ((json-lines (process-get process 'partial-input)))
     ;; construct output lines
     (process-put process 'partial-input "")
@@ -428,7 +428,7 @@ bear this in mind."
   (let ((target-buffer (process-get process 'target-buffer)))
     (when (buffer-live-p target-buffer)
       (with-current-buffer target-buffer
-        (setq jcm--process nil)
+        (setq jcm--processes (remove process jcm--processes))
         (jcm--set-mode-line-process)))))
 
 (defun jcm--make-help-message (_window _object pos)
@@ -557,7 +557,7 @@ WARNING: no line limit."
     ;; example definition
     (define-key map (kbd "M-.") 'jcm-jump-to-line-source)
     (define-key map (kbd "C-c C-o") 'jcm-full-message)
-    (define-key map (kbd "C-c C-c") 'jcm--kill-process)
+    (define-key map (kbd "C-c C-c") 'jcm--kill-processes)
     (define-key map (kbd "C-c C-j") 'jcm-add)
     (define-key map (kbd "C-c C-f") 'jcm-follow)
     map)
@@ -592,6 +592,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
   (journalctl-mode)
   (setq-local jcm--primary-commandline (string-trim command))
   (jcm--make-process command)
+  (add-hook 'kill-buffer-hook 'jcm--kill-processes)
   (goto-char (point-max)))
 
 (provide 'journalctl-mode)
