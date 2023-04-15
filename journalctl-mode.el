@@ -52,18 +52,17 @@
 ;; * prettified output like -o short-precise but with priority level displayed
 ;;   and ISO-esque timestamps in the same format used by --until etc.
 ;;
-;; * "M-."  - Jump to the source of the message if possible, `xref' style.
+;; * "M-."      - Jump to the source of the message if possible, `xref' style.
 ;;
-;; * "C-c C-o" - open another buffer, showing the entire journal record at point
+;; * "C-c C-o"  - open a buffer showing the entire journal record at point
 ;;
-;; * "C-c C-j" - add an additional process.  If region is active, a `--since' /
-;;               `--until' string will be added to the kill ring corresponding
-;;               to the selected record lines, so it can be inserted into the
-;;               journalctl query command
+;; * "C-c C-j" - add an additional process.  If region is active, a --since /
+;;               --until string will be added to the kill ring corresponding to
+;;               the selected record lines
 ;;
-;; * "C-c C-c" - kill the current journalctl processes, like with `comint'
+;; * "C-c C-c"  - kill the current journalctl processes, like with `comint'
 ;;
-;; * "C-c C-f" - start/restart the original query with --follow
+;; * "C-c C-f"  - start/restart the original query with --follow
 
 ;;;; Tips/Tricks
 ;;
@@ -569,11 +568,28 @@ WARNING: no line limit."
            "__REALTIME_TIMESTAMP"
            (jcm--get-line-record (point-max)))))))
 
+(defun jcm--extract-region-timestamps ()
+  "If region is active, add --since/--until to the kill ring."
+  (when (and (derived-mode-p 'journalctl-mode) (region-active-p))
+    (kill-new
+     (format "--since \"%s\" --until \"%s\""
+             (jcm--extract-timestamp
+              "__REALTIME_TIMESTAMP"
+              (jcm--get-line-record (region-beginning)))
+             (jcm--extract-timestamp
+              "__REALTIME_TIMESTAMP"
+              (jcm--get-line-record (region-end)))))))
+
 (defun jcm-add (command)
-  "Add an additional journalctl COMMAND to the current journalctl buffer."
+  "Add an additional journalctl COMMAND to the current journalctl buffer.
+
+If region is active, a --since/--until string will be in the kill
+ring for the time range of the selected region."
   (interactive
-   (list
-    (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history)))
+   (progn
+     (jcm--extract-region-timestamps)
+     (list
+      (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history))))
   (jcm--make-process command))
 
 (defvar journalctl-mode-map
