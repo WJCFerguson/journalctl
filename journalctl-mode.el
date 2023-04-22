@@ -215,12 +215,27 @@ _SYSTEMD_USER_UNIT\
 (defconst jcm--max-json-buffer-time 0.1
   "Maximum age of buffer for incoming JSON data before triggering a parse.")
 
-(defun jcm--kill-processes ()
-  "Kill all running journalctl processes."
+(defun jcm--select-process ()
+  "Get user to select one of the current processes."
   (interactive)
-  (dolist (proc jcm--processes)
-    (when (and proc (process-live-p proc))
-      (kill-process proc))))
+  (let ((proc-name (completing-read
+                    "Kill Process: "
+                    (mapcar (lambda (p)
+                              (process-get p 'name))
+                            jcm--processes)
+                    nil
+                    t)))
+    (seq-find (lambda (p) (string-equal (process-get p 'name) proc-name))
+              jcm--processes)))
+
+(defun jcm--kill-processes (&optional arg)
+  "Select a running journalctl process to kill.  With ARG, just kill them all."
+  (interactive "P")
+  (if arg
+      (dolist (proc jcm--processes)
+        (when (and proc (process-live-p proc))
+          (kill-process proc)))
+    (kill-process (jcm--select-process))))
 
 (defun jcm--get-value (field-name record)
   "Return the value for FIELD-NAME from RECORD."
@@ -332,8 +347,9 @@ COMMAND may be a string or a list of string arguments."
                             (split-string-shell-command (string-trim command))
                           command))
          (file-handler (find-file-name-handler default-directory 'make-process))
+         (command-name (if (stringp command) command (combine-and-quote-strings command)))
          (make-process-args
-          (list ':name (if (stringp command) command (combine-and-quote-strings command))
+          (list ':name command-name
                 ':command (append split-command jcm--required-arguments)
                 ':noquery t
                 ':filter 'jcm--filter-incoming
@@ -342,7 +358,8 @@ COMMAND may be a string or a list of string arguments."
                           (apply file-handler 'make-process make-process-args)
                         (apply 'make-process make-process-args))))
     (set-process-plist new-process
-                       (list 'partial-input ""
+                       (list 'name command-name
+                             'partial-input ""
                              'target-buffer target-buffer
                              'start-time (float-time)
                              'insertion-marker (set-marker (make-marker) (point-max))))
@@ -537,7 +554,7 @@ This stores RECORD as `jcm--record record' property on the line itself."
              command-root "short-precise;"
              " &"))))
 
-(defun jcm-follow (&optional command)
+(defun jcm-follow ()
   "(Re) run the original command of the buffer with --follow.
 
 Starts from the last line of the current buffer
@@ -559,8 +576,7 @@ WARNING: no line limit."
                      ((string-match "^--\\(since\\|until\\|lines\\)=" x)
                       nil)
                      (t t)))
-                  (split-string-shell-command (or command
-                                                  jcm--primary-commandline))))
+                  (split-string-shell-command jcm--primary-commandline)))
     ;; add follow args
     (list "--follow"
           "--since"
@@ -632,7 +648,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
   (journalctl-mode)
   (setq-local jcm--primary-commandline (string-trim command))
   (jcm--make-process command)
-  (add-hook 'kill-buffer-hook 'jcm--kill-processes)
+  (add-hook 'kill-buffer-hook (lambda () (jcm--kill-processes t)))
   (goto-char (point-max)))
 
 (provide 'journalctl-mode)
