@@ -77,7 +77,7 @@
 ;; * Don't forget good old `highlight-regexp' - 'M-s h (r|l)' (including from
 ;;   isearch)
 ;;
-;; * `highlight-symbol-nav-mode' does a great job of jumping to next/prev of
+;; * `symbol-overlay-mode' does a great job of jumping to next/prev of
 ;;   symbol under cursor (e.g. the journalctl identifier)
 ;;
 
@@ -629,11 +629,8 @@ ring for the time range of the selected region."
   "Major mode for browsing journald records with `journalctl'.
 
 \\{journalctl-mode-map}"
-  ;; highlight-symbol, and its nav mode, are highly useful.  Is this too
-  ;; opinionated to include?:
-  (when (featurep 'highlight-symbol)
-    (highlight-symbol-mode)
-    (highlight-symbol-nav-mode))
+  (when (featurep 'symbol-overlay)
+    (symbol-overlay-mode))
   ;; visual-line makes sense for messages to flow nicely
   (visual-line-mode))
 
