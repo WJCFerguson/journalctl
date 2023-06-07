@@ -437,7 +437,8 @@ bear this in mind."
               (undo-boundary)
               (let ((pre-insert-point (point)))
                 (insert text)
-                (ansi-color-filter-region pre-insert-point (point)))
+                (ansi-color-filter-region pre-insert-point (point))
+                (font-lock-fontify-region pre-insert-point (point)))
               (set-marker (process-get process 'insertion-marker) (point))
               (undo-boundary)))
           (when return-end
