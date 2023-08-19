@@ -234,14 +234,16 @@ _SYSTEMD_USER_UNIT\
     (seq-find (lambda (p) (string-equal (process-get p 'name) proc-name))
               jcm--processes)))
 
-(defun jcm--kill-processes (&optional arg)
-  "Select a running journalctl process to kill.  With ARG, just kill them all."
-  (interactive "P")
-  (if arg
-      (dolist (proc jcm--processes)
-        (when (and proc (process-live-p proc))
-          (kill-process proc)))
-    (kill-process (jcm--select-process))))
+(defun jcm--kill-process ()
+  "Have the user select a running journalctl process to kill."
+  (interactive)
+  (kill-process (jcm--select-process)))
+
+(defun jcm--kill-processes ()
+  "Kill all the journalctl processes."
+  (dolist (proc jcm--processes)
+    (when (and proc (process-live-p proc))
+      (kill-process proc))))
 
 (defun jcm--get-value (field-name record)
   "Return the value for FIELD-NAME from RECORD."
@@ -620,7 +622,7 @@ ring for the time range of the selected region."
     ;; example definition
     (define-key map (kbd "M-.") 'jcm-jump-to-line-source)
     (define-key map (kbd "C-c C-o") 'jcm-full-message)
-    (define-key map (kbd "C-c C-c") 'jcm--kill-processes)
+    (define-key map (kbd "C-c C-c") 'jcm--kill-process)
     (define-key map (kbd "C-c C-j") 'jcm-add)
     (define-key map (kbd "C-c C-f") 'jcm-follow)
     map)
@@ -652,7 +654,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
   (journalctl-mode)
   (setq-local jcm--primary-commandline (string-trim command))
   (jcm--make-process command)
-  (add-hook 'kill-buffer-hook (lambda () (jcm--kill-processes t)))
+  (add-hook 'kill-buffer-hook #'jcm--kill-processes)
   (goto-char (point-max)))
 
 (provide 'journalctl-mode)
