@@ -444,7 +444,21 @@ bear this in mind."
               (set-marker (process-get process 'insertion-marker) (point))
               (undo-boundary)))
           (when return-end
-            (goto-char (point-max))))))))
+            (goto-char (point-max))
+            ;; the window has its own idea of point so we must also update that
+            (when (get-buffer-window)
+              (set-window-point (get-buffer-window) (point-max))))
+          (set-marker jcm--point-marker (point)))))))
+
+(defun jcm--window-buffer-change (window)
+  "Called when buffer is newly displayed; fixes window-point for WINDOW."
+  ;; when we switch back to a window, e.g. with tab-bar-mode, sync the
+  ;; window-point to (point) as otherwise tab-bar may restore it to wherever it
+  ;; was the last time the tab was visible.
+  (when (eq (type-of window) 'window)
+    (with-current-buffer (window-buffer window)
+      (when (eq 'journalctl-mode major-mode)
+        (set-window-point window jcm--point-marker)))))
 
 (defun jcm--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
@@ -652,7 +666,9 @@ With COMMAND and with prefix ARG, prompt for editing the command."
     (pop-to-buffer (generate-new-buffer
                     (concat "*" remote-host (and remote-host " ") command "*"))))
   (journalctl-mode)
-  (setq-local jcm--primary-commandline (string-trim command))
+  (setq-local jcm--primary-commandline (string-trim command)
+              jcm--point-marker (set-marker (make-marker) (point-max)))
+  (add-hook 'window-buffer-change-functions #'jcm--window-buffer-change nil t)
   (jcm--make-process command)
   (add-hook 'kill-buffer-hook #'jcm--kill-processes)
   (goto-char (point-max)))
