@@ -215,6 +215,12 @@ _SYSTEMD_USER_UNIT\
 (defvar-local jcm--primary-commandline nil
   "The command line the process was launched with.")
 
+(defvar-local jcm--point-marker nil
+  "The position of point in the buffer.
+
+When the buffer is re-displayed, point is often restored to where
+it was when we want it to be at (point-max).")
+
 (defconst jcm--max-json-buffer-size 100000
   "Size of the buffer for incoming JSON data before triggering a parse.")
 
@@ -451,7 +457,7 @@ bear this in mind."
           (set-marker jcm--point-marker (point)))))))
 
 (defun jcm--window-buffer-change (window)
-  "Called when buffer is newly displayed; fixes window-point for WINDOW."
+  "Called when buffer is newly displayed; fixes `window-point' for WINDOW."
   ;; when we switch back to a window, e.g. with tab-bar-mode, sync the
   ;; window-point to (point) as otherwise tab-bar may restore it to wherever it
   ;; was the last time the tab was visible.
