@@ -200,11 +200,16 @@ CODE_FILE,\
 CODE_LINE,\
 MESSAGE,\
 PRIORITY,\
-SYSLOG_IDENTIFIER,\
-_SYSTEMD_UNIT,\
-_SYSTEMD_USER_UNIT\
+SYSLOG_IDENTIFIER\
 ")
   "Arguments non-negotiable for journalctl.")
+
+(defvar jcm--fields-to-purge
+  '("PRIORITY"
+    "SYSLOG_IDENTIFIER"
+    "_BOOT_ID"
+    "__MONOTONIC_TIMESTAMP")
+  "Fields in journalctl JSON we no longer have use for after line generation.")
 
 (defvar-local jcm--processes nil
   "Set in a jcm-mode buffer, holds the running journalctl processes.")
@@ -509,9 +514,12 @@ This stores RECORD as `jcm--record record' property on the line itself."
                          (propertize
                           (jcm--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
-                          'line-prefix message-prefix)))
+                          'line-prefix message-prefix)
+                         "\n"))
+    ;; purge unwanted firlds from record and attach to line
+    (mapc (lambda (f) (remhash f record)) jcm--fields-to-purge)
     (put-text-property 0 1 'jcm--record record result)
-    (concat result "\n")))
+    result))
 
 (defun jcm--get-line-record (&optional at-point)
   "Fetch the parsed json record for the line a (or AT-POINT (point))."
