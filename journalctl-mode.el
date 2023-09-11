@@ -196,8 +196,6 @@ Should be configured to have equal length"
   '("--output=json"
     "--all"
     "--output-fields=\
-CODE_FILE,\
-CODE_LINE,\
 MESSAGE,\
 PRIORITY,\
 SYSLOG_IDENTIFIER\
@@ -536,8 +534,13 @@ This stores RECORD as `jcm--record record' property on the line itself."
 (defun jcm-jump-to-line-source ()
   "Jump to the source of the message at point, if possible."
   (interactive)
-  (let* ((record (jcm--get-line-record))
-         (local-file (jcm--get-value "CODE_FILE" record))
+  (let* ((line-record (jcm--get-line-record))
+         (record (json-parse-string
+                  (shell-command-to-string
+                   (format
+                    "journalctl --quiet --cursor='%s' --lines=1 --output json"
+                    (gethash "__CURSOR" line-record)))))
+         (local-file (gethash "CODE_FILE" record))
          (pathname (concat (file-remote-p default-directory) local-file)))
     (cond
      ((not local-file)
