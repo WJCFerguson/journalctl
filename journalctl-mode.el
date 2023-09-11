@@ -107,7 +107,6 @@
 (defcustom jcm-field-format-functions
   '(("PRIORITY" . jcm--format-priority)
     ("__REALTIME_TIMESTAMP" . jcm--format-timestamp)
-    ("_PID" . jcm--format-pid)
     ("MESSAGE" . jcm--format-message))
   "Alist mapping journalctl json keys to functions returning display string.
 
@@ -202,8 +201,6 @@ CODE_LINE,\
 MESSAGE,\
 PRIORITY,\
 SYSLOG_IDENTIFIER,\
-_HOSTNAME,\
-_PID,\
 _SYSTEMD_UNIT,\
 _SYSTEMD_USER_UNIT\
 ")
@@ -329,10 +326,6 @@ FIELD-NAME defaults to __REALTIME_TIMESTAMP."
   "Return face-annotated timestamp string for display from FIELD-NAME in RECORD."
   (jcm--add-face (jcm--extract-timestamp field-name record)
                         'jcm-timestamp-face))
-
-(defun jcm--format-pid (field-name record)
-  "Return FIELD-NAME from RECORD formatted as _PID."
-  (format "[%s]" (jcm--get-value field-name record)))
 
 (defun jcm--format-field (field-name record)
   "Format FIELD-NAME from RECORD for display.
@@ -500,23 +493,6 @@ bear this in mind."
         (setq jcm--processes (remove process jcm--processes))
         (jcm--set-mode-line-process)))))
 
-(defun jcm--make-help-message (_window _object pos)
-  "Return a help message for help-echo on the printed line at POS."
-  (let* ((record (jcm--get-line-record pos))
-         (timestamp (jcm--timestamp record))
-         (timestr (format (format-time-string "%Y-%m-%d %H:%M:%S.%%06d %p %Z" (car timestamp))
-                          (cdr timestamp)))
-         (file (jcm--get-value "CODE_FILE" record))
-         (unit (or (jcm--get-value "_SYSTEMD_USER_UNIT" record)
-                   (jcm--get-value "_SYSTEMD_UNIT" record))))
-    (concat timestr
-            (if file (format "\nSource: %s:%s"
-                             file
-                             (jcm--get-value "CODE_LINE" record)))
-            "\nHost  : " (jcm--get-value "_HOSTNAME" record)
-            "\nUnit  : " unit
-            "\nPID   : " (jcm--get-value "_PID" record))))
-
 (defun jcm--format-line (record)
   "Return journald RECORD formatted as a propertized text line.
 
@@ -533,8 +509,7 @@ This stores RECORD as `jcm--record record' property on the line itself."
                          (propertize
                           (jcm--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
-                          'line-prefix message-prefix
-                          'help-echo 'jcm--make-help-message)))
+                          'line-prefix message-prefix)))
     (put-text-property 0 1 'jcm--record record result)
     (concat result "\n")))
 
