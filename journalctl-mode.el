@@ -4,7 +4,7 @@
 
 ;; Author: James Ferguson <james@faff.org>
 ;; Keywords: lisp
-;; Version: 0.0.1
+;; Version: 1.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -21,9 +21,9 @@
 
 ;;; Commentary:
 ;;
-;; This is an Emacs major-mode for viewing and '--follow' ing journald logs.
+;; This is an Emacs major-mode for viewing and '--follow'ing journald logs.
 ;;
-;; It should build upon the experience of running journalctl via `shell-command'
+;; It builds upon the experience of running journalctl via `shell-command'
 ;; in a `comint' buffer.  As such it leaves the buffer writeable, so you
 ;; add/remove/annotate or corrupt the messages in any way you wish.
 ;;
@@ -31,14 +31,13 @@
 ;; journalctl query processes.  Output is interleaved and de-duplicated in
 ;; timestamp order.  So for instance you can simultaneously view a broad query
 ;; at '--priority warning' along with a more narrowly focused '--priority debug'
-;; query, or augment the output with additional low-level logging for a period
-;; before error or warning messages
+;; or '--grep' query.
 ;;
 ;; Additional processes may be added at any time, so for instance around a
-;; warning or error message, info or debug lines may be inserted.  To facilitate
-;; this, if the region is active when adding a process ("C-c C-j"), a
-;; '--since/--until' string will be generated and added to the kill ring to help
-;; with query composition.
+;; warning or error message, info or debug lines may be inserted.  To aid this,
+;; if the region is active when adding a process ("C-c C-j"), a
+;; '--since=... --until...' string will be generated and added to the kill ring
+;; to help with query composition.
 ;;
 ;; At present it does not offer a specific rich UI for journalctl command
 ;; composition.  But enabling `bash-completion.el' or similar will often help
