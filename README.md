@@ -12,8 +12,8 @@ performing monitoring and forensics.  It replaces and enhances conventionally ex
 
 It brings the following additional features:
 
- * Multiple simultaneous journalctl processes may run simultaneously with the
-   output interleaved.  E.g.:
+ * Multiple journalctl processes may run simultaneously with the output
+   interleaved.  E.g.:
    *  simultaneously view a broad query, say at '--priority warning' along with
       a more narrowly focused '--priority debug' query.
    *  Dig into the output within or near a region by requesting additional log
