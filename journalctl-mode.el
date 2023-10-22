@@ -648,9 +648,7 @@ ring for the time range of the selected region."
 
 With COMMAND and with prefix ARG, prompt for editing the command."
   (interactive
-   (list
-    (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history)
-    current-prefix-arg))
+   (list (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history)))
   (when current-prefix-arg
     (setq command (read-shell-command "Journalctl command: " command 'jcm-history)))
   (let ((remote-host (file-remote-p default-directory)))
