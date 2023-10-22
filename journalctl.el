@@ -1,10 +1,12 @@
-;;; journalctl-mode.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
+;;; journalctl.el --- Journalctl browsing mode  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2023 James Ferguson
 
 ;; Author: James Ferguson <james@faff.org>
 ;; Keywords: lisp
+;; URL: https://github.com/WJCFerguson/journalctl
 ;; Version: 1.0.1
+;; Package-Requires: ((emacs "29.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -21,7 +23,8 @@
 
 ;;; Commentary:
 ;;
-;; This is an Emacs major-mode for viewing and '--follow'ing journald logs.
+;; This is an Emacs major-mode and functions for viewing and '--follow'ing
+;; journald logs.
 ;;
 ;; It builds upon the experience of running journalctl via `shell-command'
 ;; in a `comint' buffer.  As such it leaves the buffer writeable, so you
@@ -47,7 +50,7 @@
 ;;
 ;;;; Example Installation
 ;;
-;; (use-package journalctl-mode
+;; (use-package journalctl
 ;;  :bind ("C-c C-j" . journalctl))
 
 ;;;; Features and bindings:
@@ -86,34 +89,34 @@
 (require 'ansi-color)
 
 ;; =============================== Customization ===============================
-(defgroup journalctl-mode nil
+(defgroup journalctl nil
   "Journald log browsing mode."
   :group 'tools
   :group 'convenience
-  :prefix "journalctl-mode")
+  :prefix "journalctl")
 
-(defcustom jcm-priority-faces
-  '((0 . jcm-critical-face)
-    (1 . jcm-critical-face)
-    (2 . jcm-critical-face)
-    (3 . jcm-error-face)
-    (4 . jcm-warning-face)
-    (5 . jcm-warning-face)
-    (7 . jcm-debug-face))
+(defcustom journalctl-priority-faces
+  '((0 . journalctl-critical-face)
+    (1 . journalctl-critical-face)
+    (2 . journalctl-critical-face)
+    (3 . journalctl-error-face)
+    (4 . journalctl-warning-face)
+    (5 . journalctl-warning-face)
+    (7 . journalctl-debug-face))
   "Faces for messages by journald priority level."
   :type '(alist :key-type number :value-type string))
 
-(defcustom jcm-field-format-functions
-  '(("PRIORITY" . jcm--format-priority)
-    ("__REALTIME_TIMESTAMP" . jcm--format-timestamp)
-    ("MESSAGE" . jcm--format-message))
+(defcustom journalctl-field-format-functions
+  '(("PRIORITY" . journalctl--format-priority)
+    ("__REALTIME_TIMESTAMP" . journalctl--format-timestamp)
+    ("MESSAGE" . journalctl--format-message))
   "Alist mapping journalctl json keys to functions returning display string.
 
 Functions receive arguments (FIELD-NAME RECORD), where RECORD is
 the parsed-json record."
   :type '(alist :key-type string :value-type function))
 
-(defcustom jcm-priority-strings
+(defcustom journalctl-priority-strings
   '((0 . "EMERG")
     (1 . "ALERT")
     (2 . "CRIT ")
@@ -127,71 +130,71 @@ the parsed-json record."
 Should be configured to have equal length"
   :type '(alist :key-type number :value-type string))
 
-(defgroup jcm-faces nil
+(defgroup journalctl-faces nil
   "Display informations of the current line."
   :group 'tools
   :group 'convenience
-  :group 'journalctl-mode)
+  :group 'journalctl)
 
-(defface jcm-critical-face
+(defface journalctl-critical-face
   '((((min-colors 88) (background dark))
      (:background "yellow1" :foreground "black"))
     (((background dark)) (:background "yellow" :foreground "black"))
     (((min-colors 88)) (:background "yellow1"))
     (t (:background "yellow")))
   "Face for critical or higher."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-error-face
+(defface journalctl-error-face
   '((t :inherit error))
   "Face for error messages."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-warning-face
+(defface journalctl-warning-face
   '((t :inherit warning))
   "Face for warning messages."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-debug-face
+(defface journalctl-debug-face
   '((t :inherit shadow))
   "Face for debug messages."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-timestamp-face
+(defface journalctl-timestamp-face
   '((t :inherit font-lock-constant-face))
   "Face for timestamps."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-source-face
+(defface journalctl-source-face
   '((t :inherit font-lock-builtin-face))
   "Face for hosts in journalctl's output."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-systemd-face
+(defface journalctl-systemd-face
   '((default :weight bold))
   "Face for messages from systemd."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-systemd-starting-face
+(defface journalctl-systemd-starting-face
   '((default :weight bold)
     (((class color) (min-colors 16) (background light)) :foreground "green4")
     (((class color) (min-colors 16) (background dark))  :foreground "green1"))
   "Face for messages from systemd."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
-(defface jcm-systemd-finishing-face
+(defface journalctl-systemd-finishing-face
   '((default :weight bold)
     (((class color) (min-colors 16) (background light)) :foreground "red4")
     (((class color) (min-colors 16) (background dark))  :foreground "red1"))
   "Face for messages from systemd."
-  :group 'jcm-faces)
+  :group 'journalctl-faces)
 
 ;; ============================= End Customization =============================
 
-(defvar jcm-history (make-list 1 "journalctl --priority=info --follow ")
+(defvar journalctl-history (make-list 1 "journalctl --priority=info --follow ")
   "History list for journalctl commands.")
 
-(defvar jcm--required-arguments
+(defvar journalctl--required-arguments
   '("--output=json"
     "--all"
     "--output-fields=\
@@ -201,56 +204,56 @@ SYSLOG_IDENTIFIER\
 ")
   "Arguments non-negotiable for journalctl.")
 
-(defvar jcm--fields-to-purge
+(defvar journalctl--fields-to-purge
   '("PRIORITY"
     "SYSLOG_IDENTIFIER"
     "_BOOT_ID"
     "__MONOTONIC_TIMESTAMP")
   "Fields in journalctl JSON we no longer have use for after line generation.")
 
-(defvar-local jcm--processes nil
-  "Set in a jcm-mode buffer, holds the running journalctl processes.")
+(defvar-local journalctl--processes nil
+  "Set in a journalctl-mode buffer, holds the running journalctl processes.")
 
-(defvar-local jcm--primary-commandline nil
+(defvar-local journalctl--primary-commandline nil
   "The command line the process was launched with.")
 
-(defvar-local jcm--point-marker nil
+(defvar-local journalctl--point-marker nil
   "The position of point in the buffer.
 
 When the buffer is re-displayed, point is often restored to where
 it was when we want it to be at (point-max).")
 
-(defconst jcm--max-json-buffer-size 100000
+(defconst journalctl--max-json-buffer-size 100000
   "Size of the buffer for incoming JSON data before triggering a parse.")
 
-(defconst jcm--max-json-buffer-time 0.1
+(defconst journalctl--max-json-buffer-time 0.1
   "Maximum age of buffer for incoming JSON data before triggering a parse.")
 
-(defun jcm-select-process ()
+(defun journalctl-select-process ()
   "Get user to select one of the current processes."
   (interactive)
   (let ((proc-name (completing-read
                     "Kill Process: "
                     (mapcar (lambda (p)
                               (process-get p 'name))
-                            jcm--processes)
+                            journalctl--processes)
                     nil
                     t)))
     (seq-find (lambda (p) (string-equal (process-get p 'name) proc-name))
-              jcm--processes)))
+              journalctl--processes)))
 
-(defun jcm-kill-process ()
+(defun journalctl-kill-process ()
   "Have the user select a running journalctl process to kill."
   (interactive)
-  (kill-process (jcm-select-process)))
+  (kill-process (journalctl-select-process)))
 
-(defun jcm--kill-processes ()
+(defun journalctl--kill-processes ()
   "Kill all the journalctl processes."
-  (dolist (proc jcm--processes)
+  (dolist (proc journalctl--processes)
     (when (and proc (process-live-p proc))
       (kill-process proc))))
 
-(defun jcm--get-value (field-name record)
+(defun journalctl--get-value (field-name record)
   "Return the value for FIELD-NAME from RECORD."
   (let ((msg (gethash field-name record)))
     (cond
@@ -260,94 +263,94 @@ it was when we want it to be at (point-max).")
      ((eq msg ':null) "")
      (t msg))))
 
-(defun jcm--priority-face (record &optional priority-num)
+(defun journalctl--priority-face (record &optional priority-num)
   "Return the priority-based face (if any) for RECORD at PRIORITY-NUM.
 
 If PRIORITY-NUM is nil its value will be fetched from RECORD."
   (let ((priority-num (or priority-num
-                          (if-let (priority (jcm--get-value "PRIORITY" record))
+                          (if-let (priority (journalctl--get-value "PRIORITY" record))
                               (string-to-number priority)
                             6))))
-    (alist-get priority-num jcm-priority-faces)))
+    (alist-get priority-num journalctl-priority-faces)))
 
-(defun jcm--add-face (str face &optional start end)
+(defun journalctl--add-face (str face &optional start end)
   "Set FACE on STR (optionally on sub-string from START to END)."
   (set-text-properties (or start 0) (or end (length str))
                        (list 'font-lock-face face)
                        str)
   str)
 
-(defun jcm--format-message (field-name record)
+(defun journalctl--format-message (field-name record)
   "Return formatted string for FIELD-NAME from RECORD."
-  (let ((result (jcm--get-value field-name record)))
-    (if-let (priority-face (jcm--priority-face record))
-        (jcm--add-face result priority-face))
-    (when (string-equal "systemd" (jcm--get-value "SYSLOG_IDENTIFIER" record))
-      (jcm--add-face result 'jcm-systemd-face)
+  (let ((result (journalctl--get-value field-name record)))
+    (if-let (priority-face (journalctl--priority-face record))
+        (journalctl--add-face result priority-face))
+    (when (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
+      (journalctl--add-face result 'journalctl-systemd-face)
       (when (string-match "Start\\(ed\\|ing\\)" result)
-        (jcm--add-face result 'jcm-systemd-starting-face
+        (journalctl--add-face result 'journalctl-systemd-starting-face
                               (match-beginning 0) (match-end 0)))
       (when (string-match "Stopp\\(ed\\|ing\\)" result)
-        (jcm--add-face result 'jcm-systemd-finishing-face
+        (journalctl--add-face result 'journalctl-systemd-finishing-face
                               (match-beginning 0) (match-end 0))))
     result))
 
-(defun jcm--format-priority (field-name record)
+(defun journalctl--format-priority (field-name record)
   "Return value for FIELD-NAME from RECORD colored by priority level."
-  (let* ((value (jcm--get-value field-name record))
+  (let* ((value (journalctl--get-value field-name record))
          (priority-num (if value (string-to-number value) 6)))
-    (jcm--add-face (alist-get priority-num jcm-priority-strings)
-                          (jcm--priority-face record priority-num))))
+    (journalctl--add-face (alist-get priority-num journalctl-priority-strings)
+                          (journalctl--priority-face record priority-num))))
 
-(defun jcm--timestamp-num (&optional record)
+(defun journalctl--timestamp-num (&optional record)
   "Return timestamp as a number from RECORD."
-  (setq record (or record (jcm--get-line-record)))
+  (setq record (or record (journalctl--get-line-record)))
   (if record
-      (string-to-number (jcm--get-value "__REALTIME_TIMESTAMP" record))
+      (string-to-number (journalctl--get-value "__REALTIME_TIMESTAMP" record))
     0))
 
-(defun jcm--timestamp (record &optional field-name)
+(defun journalctl--timestamp (record &optional field-name)
   "Return a timestamp cons of (seconds . microseconds) for a journald RECORD.
 
 FIELD-NAME defaults to __REALTIME_TIMESTAMP."
-  (let* ((timestr (jcm--get-value (or field-name "__REALTIME_TIMESTAMP")
+  (let* ((timestr (journalctl--get-value (or field-name "__REALTIME_TIMESTAMP")
                                          record))
          (len (length timestr))
          (seconds (string-to-number (substring timestr 0 (- len 6))))
          (microseconds (string-to-number (substring timestr (- len 6) len))))
     (cons seconds microseconds)))
 
-(defun jcm--extract-timestamp (field-name &optional record)
+(defun journalctl--extract-timestamp (field-name &optional record)
   "Return timestamp string for display from FIELD-NAME in RECORD."
-  (let* ((timestamp (jcm--timestamp record field-name))
+  (let* ((timestamp (journalctl--timestamp record field-name))
          (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
     (concat display-time "." (format "%06d" (cdr timestamp)))))
 
-(defun jcm--format-timestamp (field-name &optional record)
+(defun journalctl--format-timestamp (field-name &optional record)
   "Return face-annotated timestamp string for display from FIELD-NAME in RECORD."
-  (jcm--add-face (jcm--extract-timestamp field-name record)
-                        'jcm-timestamp-face))
+  (journalctl--add-face (journalctl--extract-timestamp field-name record)
+                        'journalctl-timestamp-face))
 
-(defun jcm--format-field (field-name record)
+(defun journalctl--format-field (field-name record)
   "Format FIELD-NAME from RECORD for display.
 
-Finds format function from alist `jcm-field-dformat-functions
+Finds format function from alist `journalctl-field-dformat-functions
 falling back to simple string value display."
-  (let ((format-function (alist-get field-name jcm-field-format-functions
-                                    'jcm--get-value nil 'string-equal)))
+  (let ((format-function (alist-get field-name journalctl-field-format-functions
+                                    'journalctl--get-value nil 'string-equal)))
     (funcall format-function field-name record)))
 
-(defun jcm--set-mode-line-process ()
+(defun journalctl--set-mode-line-process ()
   "Set the `mode-line-process' for process info in the mode-line."
-  (setq mode-line-process (if jcm--processes
+  (setq mode-line-process (if journalctl--processes
                               (concat " running"
-                                      (if (> (length jcm--processes) 1)
-                                          (format " (%d)" (length jcm--processes))))
+                                      (if (> (length journalctl--processes) 1)
+                                          (format " (%d)" (length journalctl--processes))))
                             " done"))
   (force-mode-line-update))
 
-(defun jcm--make-process (command)
-  "Start journalctl COMMAND to be rendered to current jcm-mode buffer.
+(defun journalctl--make-process (command)
+  "Start journalctl COMMAND to be rendered to current journalctl-mode buffer.
 
 COMMAND may be a string or a list of string arguments."
   (let* ((target-buffer (current-buffer))
@@ -358,10 +361,10 @@ COMMAND may be a string or a list of string arguments."
          (command-name (if (stringp command) command (combine-and-quote-strings command)))
          (make-process-args
           (list ':name command-name
-                ':command (append split-command jcm--required-arguments)
+                ':command (append split-command journalctl--required-arguments)
                 ':noquery t
-                ':filter 'jcm--filter-incoming
-                ':sentinel 'jcm--process-sentinel))
+                ':filter 'journalctl--filter-incoming
+                ':sentinel 'journalctl--process-sentinel))
          (new-process (if file-handler
                           (apply file-handler 'make-process make-process-args)
                         (apply 'make-process make-process-args))))
@@ -371,32 +374,32 @@ COMMAND may be a string or a list of string arguments."
                              'target-buffer target-buffer
                              'start-time (float-time)
                              'insertion-marker (set-marker (make-marker) (point-max))))
-    (setq jcm--processes (cons new-process jcm--processes))
-    (jcm--set-mode-line-process)))
+    (setq journalctl--processes (cons new-process journalctl--processes))
+    (journalctl--set-mode-line-process)))
 
-(defun jcm--filter-incoming (process incoming)
+(defun journalctl--filter-incoming (process incoming)
   "PROCESS filter receiving INCOMING json from journalctl; triggers parsing."
   (let ((unparsed (concat (process-get process 'partial-input) incoming))
         (flush-timer (process-get process 'flush-timer)))
     (process-put process 'partial-input unparsed)
     ;; if we have a lot pending, have it parse, otherwise set a timer to make
     ;; sure it will be parsed promptly.  End of process will also trigger a flush.
-    (if (> (length unparsed) jcm--max-json-buffer-size)
-        (jcm--flush-json process)
+    (if (> (length unparsed) journalctl--max-json-buffer-size)
+        (journalctl--flush-json process)
       ;; unless the timer is set
       (unless (and flush-timer (memq flush-timer timer-list))
         (process-put process
                      'flush-timer
-                     (run-with-timer jcm--max-json-buffer-time nil
-                                     'jcm--flush-json process))))))
+                     (run-with-timer journalctl--max-json-buffer-time nil
+                                     'journalctl--flush-json process))))))
 
-(defun jcm--clear-timer (process)
+(defun journalctl--clear-timer (process)
   "Clear the flush-json timer for PROCESS."
   (when-let ((flush-timer (process-get process 'flush-timer)))
     (cancel-timer flush-timer)
     (process-put process 'flush-timer nil)))
 
-(defun jcm--goto-insertion-point (process record)
+(defun journalctl--goto-insertion-point (process record)
   "Go to the insertion point for RECORD generated by PROCESS.
 
 If RECORD is nil it implies a parse failure, so go to last insertion point.
@@ -406,25 +409,25 @@ find insertion point, which *should* be acceptably efficient, but
 bear this in mind."
   (goto-char (process-get process 'insertion-marker))
   (when record
-    (let ((ts (jcm--timestamp-num record)))
+    (let ((ts (journalctl--timestamp-num record)))
       ;; skip backwards over any later than us
       (while (and (not (eq (point) (point-min)))
-                  (let ((line-record (jcm--get-line-record)))
-                    (or (not line-record) (< ts (jcm--timestamp-num line-record)))))
+                  (let ((line-record (journalctl--get-line-record)))
+                    (or (not line-record) (< ts (journalctl--timestamp-num line-record)))))
         (forward-line -1))
       ;; skip forward over any earlier than us
       (while (and (not (eq (point) (point-max)))
-                  (let ((line-record (jcm--get-line-record)))
-                    (or (not line-record) (> ts (jcm--timestamp-num line-record)))))
+                  (let ((line-record (journalctl--get-line-record)))
+                    (or (not line-record) (> ts (journalctl--timestamp-num line-record)))))
         (forward-line 1)))))
 
-(defun jcm--records-equal (record1 record2)
+(defun journalctl--records-equal (record1 record2)
   "Return if RECORD1 and RECORD2 are the same message."
   (and record1 record2
        (equal (gethash "__REALTIME_TIMESTAMP" record1) (gethash "__REALTIME_TIMESTAMP" record2))
        (equal (gethash "MESSAGE" record1) (gethash "MESSAGE" record2))))
 
-(defun jcm--insert-line (process record text)
+(defun journalctl--insert-line (process record text)
   "Insert TEXT for RECORD to PROCESS's target buffer."
   (let ((target-buffer (process-get process 'target-buffer)))
     (if (not (buffer-live-p target-buffer))
@@ -433,9 +436,9 @@ bear this in mind."
         (let ((return-end (eq (point) (point-max))))
           (save-excursion
             (widen)
-            (jcm--goto-insertion-point process record)
+            (journalctl--goto-insertion-point process record)
             ;; insert if it's not already there
-            (when (not (jcm--records-equal (jcm--get-line-record) record))
+            (when (not (journalctl--records-equal (journalctl--get-line-record) record))
               (undo-boundary)
               (let ((pre-insert-point (point)))
                 (insert text)
@@ -448,9 +451,9 @@ bear this in mind."
             ;; the window has its own idea of point so we must also update that
             (when (get-buffer-window)
               (set-window-point (get-buffer-window) (point-max))))
-          (set-marker jcm--point-marker (point)))))))
+          (set-marker journalctl--point-marker (point)))))))
 
-(defun jcm--window-buffer-change (window)
+(defun journalctl--window-buffer-change (window)
   "Called when buffer is newly displayed; fixes `window-point' for WINDOW."
   ;; when we switch back to a window, e.g. with tab-bar-mode, sync the
   ;; window-point to (point) as otherwise tab-bar may restore it to wherever it
@@ -458,11 +461,11 @@ bear this in mind."
   (when (eq (type-of window) 'window)
     (with-current-buffer (window-buffer window)
       (when (eq 'journalctl-mode major-mode)
-        (set-window-point window jcm--point-marker)))))
+        (set-window-point window journalctl--point-marker)))))
 
-(defun jcm--flush-json (process)
+(defun journalctl--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
-  (jcm--clear-timer process)
+  (journalctl--clear-timer process)
   (let ((json-lines (process-get process 'partial-input)))
     ;; construct output lines
     (process-put process 'partial-input "")
@@ -472,67 +475,67 @@ bear this in mind."
         (condition-case result
             (json-parse-string line) ;; value returned *is* used - silly checker
           (:success
-           (jcm--insert-line process
+           (journalctl--insert-line process
                                     result
-                                    (jcm--format-line result)))
+                                    (journalctl--format-line result)))
           ((json-parse-error json-readtable-error)
-           (jcm--insert-line process
+           (journalctl--insert-line process
                                     nil
                                     (format "JSON parse Failure: %S; when parsing %S"
                                             (cadr result)
                                             line))))))))
 
-(defun jcm--process-sentinel (process _event-description)
-  "Sentinel function for a journalctl PROCESS serving to a jcm-mode buffer."
-  (jcm--flush-json process)
+(defun journalctl--process-sentinel (process _event-description)
+  "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
+  (journalctl--flush-json process)
   (if (not (process-live-p process))
       (message "Journalctl process took %.2fs"
                (- (float-time) (process-get process 'start-time))))
   (let ((target-buffer (process-get process 'target-buffer)))
     (when (buffer-live-p target-buffer)
       (with-current-buffer target-buffer
-        (setq jcm--processes (remove process jcm--processes))
-        (jcm--set-mode-line-process)))))
+        (setq journalctl--processes (remove process journalctl--processes))
+        (journalctl--set-mode-line-process)))))
 
-(defun jcm--format-line (record)
+(defun journalctl--format-line (record)
   "Return journald RECORD formatted as a propertized text line.
 
-This stores RECORD as `jcm--record record' property on the line itself."
+This stores RECORD as `journalctl--record record' property on the line itself."
   (let* ((result (concat
-                  (jcm--format-field "__REALTIME_TIMESTAMP" record) " "
-                  (jcm--format-field "PRIORITY" record) " "
-                  (jcm--add-face
-                   (format "%-20s"(jcm--format-field "SYSLOG_IDENTIFIER" record))
-                   'jcm-source-face)
+                  (journalctl--format-field "__REALTIME_TIMESTAMP" record) " "
+                  (journalctl--format-field "PRIORITY" record) " "
+                  (journalctl--add-face
+                   (format "%-20s"(journalctl--format-field "SYSLOG_IDENTIFIER" record))
+                   'journalctl-source-face)
                   " "))
          (message-prefix (make-string (length result) ?\ )))
     (setq result (concat result
                          (propertize
-                          (jcm--format-field "MESSAGE" record)
+                          (journalctl--format-field "MESSAGE" record)
                           'wrap-prefix message-prefix
                           'line-prefix message-prefix)
                          "\n"))
     ;; purge unwanted fields from record and attach to line
-    (mapc (lambda (f) (remhash f record)) jcm--fields-to-purge)
-    (put-text-property 0 1 'jcm--record record result)
+    (mapc (lambda (f) (remhash f record)) journalctl--fields-to-purge)
+    (put-text-property 0 1 'journalctl--record record result)
     result))
 
-(defun jcm--get-line-record (&optional at-point)
+(defun journalctl--get-line-record (&optional at-point)
   "Fetch the parsed json record for the line a (or AT-POINT (point))."
   ;; if user has annotated lines, we want to skip back to find the line
   (save-excursion
     (when at-point (goto-char at-point))
     (goto-char (pos-bol))
-    (let ((result (get-text-property (pos-bol) 'jcm--record)))
+    (let ((result (get-text-property (pos-bol) 'journalctl--record)))
       (while (not (or result (eq (point) (point-min))))
         (forward-line -1)
-        (setq result (get-text-property (pos-bol) 'jcm--record)))
+        (setq result (get-text-property (pos-bol) 'journalctl--record)))
       result)))
 
-(defun jcm-jump-to-line-source ()
+(defun journalctl-jump-to-line-source ()
   "Jump to the source of the message at point, if possible."
   (interactive)
-  (let* ((line-record (jcm--get-line-record))
+  (let* ((line-record (journalctl--get-line-record))
          (record (json-parse-string
                   (shell-command-to-string
                    (format
@@ -549,14 +552,14 @@ This stores RECORD as `jcm--record record' property on the line itself."
       ;; with M-. we're emulating xref so push marker for M-,
       (xref-push-marker-stack)
       (find-file pathname)
-      (when-let ((line (jcm--get-value "CODE_LINE" record)))
+      (when-let ((line (journalctl--get-value "CODE_LINE" record)))
         (goto-char (point-min))
         (forward-line (1- (string-to-number line))))))))
 
-(defun jcm-full-message ()
+(defun journalctl-full-message ()
   "Fetch the full journalctl message at point into a buffer."
   (interactive)
-  (let* ((record (jcm--get-line-record))
+  (let* ((record (journalctl--get-line-record))
          (command-root (format
                         "journalctl --quiet --cursor='%s' --lines=1 --output "
                         (gethash "__CURSOR" record))))
@@ -567,14 +570,14 @@ This stores RECORD as `jcm--record record' property on the line itself."
              command-root "short-precise;"
              " &"))))
 
-(defun jcm-follow ()
+(defun journalctl-follow ()
   "(Re) run the original command of the buffer with --follow.
 
 Starts from the last line of the current buffer
 
 WARNING: no line limit."
   (interactive)
-  (jcm--make-process
+  (journalctl--make-process
    (append
     ;; command with since, until & lines removed
     (let ((delete-next nil)
@@ -589,48 +592,48 @@ WARNING: no line limit."
                      ((string-match "^--\\(since\\|until\\|lines\\)=" x)
                       nil)
                      (t t)))
-                  (split-string-shell-command jcm--primary-commandline)))
+                  (split-string-shell-command journalctl--primary-commandline)))
     ;; add follow args
     (list "--follow"
           "--since"
-          (jcm--extract-timestamp
+          (journalctl--extract-timestamp
            "__REALTIME_TIMESTAMP"
-           (jcm--get-line-record (point-max)))))))
+           (journalctl--get-line-record (point-max)))))))
 
-(defun jcm--extract-region-timestamps ()
+(defun journalctl--extract-region-timestamps ()
   "If region is active, add --since/--until to the kill ring."
   (when (and (derived-mode-p 'journalctl-mode) (region-active-p))
     (kill-new
      (format "--since \"%s\" --until \"%s\""
-             (jcm--extract-timestamp
+             (journalctl--extract-timestamp
               "__REALTIME_TIMESTAMP"
-              (jcm--get-line-record (region-beginning)))
-             (jcm--extract-timestamp
+              (journalctl--get-line-record (region-beginning)))
+             (journalctl--extract-timestamp
               "__REALTIME_TIMESTAMP"
-              (jcm--get-line-record (region-end)))))))
+              (journalctl--get-line-record (region-end)))))))
 
-(defun jcm-add (command)
+(defun journalctl-add (command)
   "Add an additional journalctl COMMAND to the current journalctl buffer.
 
 If region is active, a --since/--until string will be in the kill
 ring for the time range of the selected region."
   (interactive
    (progn
-     (jcm--extract-region-timestamps)
+     (journalctl--extract-region-timestamps)
      (list
-      (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history))))
-  (jcm--make-process command))
+      (read-shell-command "Journalctl command: " (car journalctl-history) 'journalctl-history))))
+  (journalctl--make-process command))
 
 (defvar journalctl-mode-map
   (let ((map (make-sparse-keymap)))
     ;; example definition
-    (define-key map (kbd "M-.") 'jcm-jump-to-line-source)
-    (define-key map (kbd "C-c C-o") 'jcm-full-message)
-    (define-key map (kbd "C-c C-c") 'jcm-kill-process)
-    (define-key map (kbd "C-c C-j") 'jcm-add)
-    (define-key map (kbd "C-c C-f") 'jcm-follow)
+    (define-key map (kbd "M-.") 'journalctl-jump-to-line-source)
+    (define-key map (kbd "C-c C-o") 'journalctl-full-message)
+    (define-key map (kbd "C-c C-c") 'journalctl-kill-process)
+    (define-key map (kbd "C-c C-j") 'journalctl-add)
+    (define-key map (kbd "C-c C-f") 'journalctl-follow)
     map)
-  "Basic mode map for `jcm-mode'.")
+  "Basic mode map for `journalctl-mode'.")
 
 (define-derived-mode journalctl-mode fundamental-mode "journalctl"
   "Major mode for browsing journald records with `journalctl'.
@@ -647,22 +650,19 @@ ring for the time range of the selected region."
 
 With COMMAND and with prefix ARG, prompt for editing the command."
   (interactive
-   (list (read-shell-command "Journalctl command: " (car jcm-history) 'jcm-history)))
+   (list (read-shell-command "Journalctl command: " (car journalctl-history) 'journalctl-history)))
   (when current-prefix-arg
-    (setq command (read-shell-command "Journalctl command: " command 'jcm-history)))
+    (setq command (read-shell-command "Journalctl command: " command 'journalctl-history)))
   (let ((remote-host (file-remote-p default-directory)))
     (pop-to-buffer (generate-new-buffer
                     (concat "*" remote-host (and remote-host " ") command "*"))))
   (journalctl-mode)
-  (setq-local jcm--primary-commandline (string-trim command)
-              jcm--point-marker (set-marker (make-marker) (point-max)))
-  (add-hook 'window-buffer-change-functions #'jcm--window-buffer-change nil t)
-  (jcm--make-process command)
-  (add-hook 'kill-buffer-hook #'jcm--kill-processes)
+  (setq-local journalctl--primary-commandline (string-trim command)
+              journalctl--point-marker (set-marker (make-marker) (point-max)))
+  (add-hook 'window-buffer-change-functions #'journalctl--window-buffer-change nil t)
+  (journalctl--make-process command)
+  (add-hook 'kill-buffer-hook #'journalctl--kill-processes)
   (goto-char (point-max)))
 
-(provide 'journalctl-mode)
-;; Local Variables:
-;; read-symbol-shorthands: (("jcm-" . "journalctl-mode-"))
-;; End:
-;;; journalctl-mode.el ends here
+(provide 'journalctl)
+;;; journalctl.el ends here
