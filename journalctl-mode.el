@@ -226,7 +226,7 @@ it was when we want it to be at (point-max).")
 (defconst jcm--max-json-buffer-time 0.1
   "Maximum age of buffer for incoming JSON data before triggering a parse.")
 
-(defun jcm--select-process ()
+(defun jcm-select-process ()
   "Get user to select one of the current processes."
   (interactive)
   (let ((proc-name (completing-read
@@ -239,10 +239,10 @@ it was when we want it to be at (point-max).")
     (seq-find (lambda (p) (string-equal (process-get p 'name) proc-name))
               jcm--processes)))
 
-(defun jcm--kill-process ()
+(defun jcm-kill-process ()
   "Have the user select a running journalctl process to kill."
   (interactive)
-  (kill-process (jcm--select-process)))
+  (kill-process (jcm-select-process)))
 
 (defun jcm--kill-processes ()
   "Kill all the journalctl processes."
@@ -626,7 +626,7 @@ ring for the time range of the selected region."
     ;; example definition
     (define-key map (kbd "M-.") 'jcm-jump-to-line-source)
     (define-key map (kbd "C-c C-o") 'jcm-full-message)
-    (define-key map (kbd "C-c C-c") 'jcm--kill-process)
+    (define-key map (kbd "C-c C-c") 'jcm-kill-process)
     (define-key map (kbd "C-c C-j") 'jcm-add)
     (define-key map (kbd "C-c C-f") 'jcm-follow)
     map)
