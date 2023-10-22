@@ -255,9 +255,7 @@ it was when we want it to be at (point-max).")
   (let ((msg (gethash field-name record)))
     (cond
      ((vectorp msg)
-      ;; multibyte strings come as a vector so we have to convert.  NOTE: this seems
-      ;; flawed, e.g. when starting Node there are some failed characters vs text
-      ;; output.
+      ;; multibyte strings come as a vector so we have to convert.
       (decode-coding-string (mapconcat #'byte-to-string (gethash field-name record) "") 'utf-8))
      ((eq msg ':null) "")
      (t msg))))
@@ -514,7 +512,7 @@ This stores RECORD as `jcm--record record' property on the line itself."
                           'wrap-prefix message-prefix
                           'line-prefix message-prefix)
                          "\n"))
-    ;; purge unwanted firlds from record and attach to line
+    ;; purge unwanted fields from record and attach to line
     (mapc (lambda (f) (remhash f record)) jcm--fields-to-purge)
     (put-text-property 0 1 'jcm--record record result)
     result))
