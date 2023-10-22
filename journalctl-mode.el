@@ -267,8 +267,9 @@ it was when we want it to be at (point-max).")
 
 If PRIORITY-NUM is nil its value will be fetched from RECORD."
   (let ((priority-num (or priority-num
-                          (string-to-number (jcm--get-value "PRIORITY"
-                                                                   record)))))
+                          (if-let (priority (jcm--get-value "PRIORITY" record))
+                              (string-to-number priority)
+                            6))))
     (alist-get priority-num jcm-priority-faces)))
 
 (defun jcm--add-face (str face &optional start end)
@@ -296,7 +297,7 @@ If PRIORITY-NUM is nil its value will be fetched from RECORD."
 (defun jcm--format-priority (field-name record)
   "Return value for FIELD-NAME from RECORD colored by priority level."
   (let* ((value (jcm--get-value field-name record))
-         (priority-num (string-to-number value)))
+         (priority-num (if value (string-to-number value) 6)))
     (jcm--add-face (alist-get priority-num jcm-priority-strings)
                           (jcm--priority-face record priority-num))))
 
