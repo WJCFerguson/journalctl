@@ -43,3 +43,7 @@ Installing `bash-completion.el` will give good quality completion for composing 
 ## Status and Future
 
 See Github Issues for some possible future enhancements and bugfixes.
+
+## journalctl-mode package
+
+A prior package exists called [`journalctl-mode`](https://github.com/SebastianMeisel/journalctl-mode/tree/transient) (rather than just `journalctl`) exists with a rather different focus and approach.  This one fetches and interleaves JSON data using multiple asynchronous simultaneous `journalctl` queries, while the other offers a UI for query-building and chunked synchronous data loading.
