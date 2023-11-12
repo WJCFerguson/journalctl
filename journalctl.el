@@ -217,12 +217,6 @@ SYSLOG_IDENTIFIER\
 (defvar-local journalctl--primary-commandline nil
   "The command line the process was launched with.")
 
-(defvar-local journalctl--point-marker nil
-  "The position of point in the buffer.
-
-When the buffer is re-displayed, point is often restored to where
-it was when we want it to be at (point-max).")
-
 (defconst journalctl--max-json-buffer-size 100000
   "Size of the buffer for incoming JSON data before triggering a parse.")
 
@@ -450,18 +444,7 @@ bear this in mind."
             (goto-char (point-max))
             ;; the window has its own idea of point so we must also update that
             (when (get-buffer-window)
-              (set-window-point (get-buffer-window) (point-max))))
-          (set-marker journalctl--point-marker (point)))))))
-
-(defun journalctl--window-buffer-change (window)
-  "Called when buffer is newly displayed; fixes `window-point' for WINDOW."
-  ;; when we switch back to a window, e.g. with tab-bar-mode, sync the
-  ;; window-point to (point) as otherwise tab-bar may restore it to wherever it
-  ;; was the last time the tab was visible.
-  (when (eq (type-of window) 'window)
-    (with-current-buffer (window-buffer window)
-      (when (eq 'journalctl-mode major-mode)
-        (set-window-point window journalctl--point-marker)))))
+              (set-window-point (get-buffer-window) (point-max)))))))))
 
 (defun journalctl--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
@@ -657,9 +640,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
     (pop-to-buffer (generate-new-buffer
                     (concat "*" remote-host (and remote-host " ") command "*"))))
   (journalctl-mode)
-  (setq-local journalctl--primary-commandline (string-trim command)
-              journalctl--point-marker (set-marker (make-marker) (point-max)))
-  (add-hook 'window-buffer-change-functions #'journalctl--window-buffer-change nil t)
+  (setq-local journalctl--primary-commandline (string-trim command))
   (journalctl--make-process command)
   (add-hook 'kill-buffer-hook #'journalctl--kill-processes)
   (goto-char (point-max)))
