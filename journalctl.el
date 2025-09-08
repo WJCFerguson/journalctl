@@ -622,7 +622,7 @@ ring for the time range of the selected region."
   "Major mode for browsing journald records with `journalctl'.
 
 \\{journalctl-mode-map}"
-  (when (featurep 'symbol-overlay)
+  (when (fboundp 'symbol-overlay-mode)
     (symbol-overlay-mode))
   ;; visual-line makes sense for messages to flow nicely
   (visual-line-mode))
