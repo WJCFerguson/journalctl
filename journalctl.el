@@ -427,7 +427,8 @@ bear this in mind."
     (if (not (buffer-live-p target-buffer))
         (when (process-live-p process) (kill-process process))
       (with-current-buffer target-buffer
-        (let ((return-end (eq (point) (point-max))))
+        (let ((return-end (eq (point) (point-max)))
+              (inhibit-read-only t))
           (save-excursion
             (widen)
             (journalctl--goto-insertion-point process record)
