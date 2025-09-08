@@ -642,7 +642,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
   (journalctl-mode)
   (setq-local journalctl--primary-commandline (string-trim command))
   (journalctl--make-process command)
-  (add-hook 'kill-buffer-hook #'journalctl--kill-processes)
+  (add-hook 'kill-buffer-hook #'journalctl--kill-processes 0 t)
   (goto-char (point-max)))
 
 (provide 'journalctl)
