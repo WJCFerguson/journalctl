@@ -262,7 +262,7 @@ SYSLOG_IDENTIFIER\
 
 If PRIORITY-NUM is nil its value will be fetched from RECORD."
   (let ((priority-num (or priority-num
-                          (if-let (priority (journalctl--get-value "PRIORITY" record))
+                          (if-let* ((priority (journalctl--get-value "PRIORITY" record)))
                               (string-to-number priority)
                             6))))
     (alist-get priority-num journalctl-priority-faces)))
@@ -277,7 +277,7 @@ If PRIORITY-NUM is nil its value will be fetched from RECORD."
 (defun journalctl--format-message (field-name record)
   "Return formatted string for FIELD-NAME from RECORD."
   (let ((result (journalctl--get-value field-name record)))
-    (if-let (priority-face (journalctl--priority-face record))
+    (if-let* ((priority-face (journalctl--priority-face record)))
         (journalctl--add-face result priority-face))
     (when (string-equal "systemd" (journalctl--get-value "SYSLOG_IDENTIFIER" record))
       (journalctl--add-face result 'journalctl-systemd-face)
@@ -389,7 +389,7 @@ COMMAND may be a string or a list of string arguments."
 
 (defun journalctl--clear-timer (process)
   "Clear the flush-json timer for PROCESS."
-  (when-let ((flush-timer (process-get process 'flush-timer)))
+  (when-let* ((flush-timer (process-get process 'flush-timer)))
     (cancel-timer flush-timer)
     (process-put process 'flush-timer nil)))
 
@@ -536,7 +536,7 @@ This stores RECORD as `journalctl--record record' property on the line itself."
       ;; with M-. we're emulating xref so push marker for M-,
       (xref-push-marker-stack)
       (find-file pathname)
-      (when-let ((line (journalctl--get-value "CODE_LINE" record)))
+      (when-let* ((line (journalctl--get-value "CODE_LINE" record)))
         (goto-char (point-min))
         (forward-line (1- (string-to-number line))))))))
 
