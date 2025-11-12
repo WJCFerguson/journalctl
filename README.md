@@ -1,30 +1,27 @@
 # Emacs Journald Log Viewer
 
 This package defines a mode and functions to aid with monitoring, debugging and
-forensics of journald logs via `journalctl`.
+forensics using journald logs via `journalctl`.
 
-Suggestions, Github Issues, and PRs gratefully received to advance this project that I consider at minimum-useful-package state (2023-10).
+**Project Status**:  This project is functional and active!  See [Status and Future](#status-and-future) below.
 
 ## Description
 
-This builds upon the already decent baseline experience of viewing logs via `async-shell-command` (`M-&`).  
+This provides an experience that builds upon that of viewing logs via `async-shell-command` (`M-&`).  
 
-The `journalctl` log view command is spawned in a conventional Emacs way, for
-which Emacs completion and history, along with packages such as
-`bash-completion.el`, already provide a solid helpful interface.
+One or more `journalctl` log view commands are spawned via the minibuffer, with standard Emacs completion and history.  Packages such as [`bash-completion.el`](https://github.com/szermatt/emacs-bash-completion) are recommended to enhance command building.
 
-It brings the following additional features:
+This `journalctl` package brings the following additional features:
 
  * rich and clear text highlighting
- * Multiple simultaneous journalctl processes may run, with output
-   interleaved.  E.g.:
+ * Multiple simultaneous journalctl processes may run, interleaving output, E.g.:
    *  simultaneously view a broad query, say at '--priority warning' along with
       a more narrowly focused '--priority debug' query.
    *  Dig into the output within or near a region by requesting additional log
-      records.  To facilitate this, if a log region is active when spawning an
+      records.  To facilitate this, if the region is active when spawning an
       additional command, the kill ring is augmented with a
       `--since=... --until=...` string generated from the region's timestamps.
- * The complete JSON log record is processed facilitating richer features
+ * The complete JSON log record is processed facilitating rich features
  * The full JSON record for a given log line under point may be summoned and
    examined
  * Where the record includes file name and line number data, you can jump from a
@@ -40,13 +37,17 @@ e.g.:
  :bind ("C-c C-j" . journalctl))
 ```
 
-Installing `bash-completion.el` will give good quality completion for composing commands.  
+Installing `bash-completion.el` is highly recommended in general for command execution throughout Emacs, and assists greatly with generating journalctl commands.
 
 Further details and key bindings are included in the Commentary section of [./journalctl-mode.el](./journalctl-mode.el) and docstrings of the entry functions.
 
 ## Status and Future
 
-See Github Issues for some possible future enhancements and bugfixes.
+Despite minimal activity and limited bling and polish, this package has been solid and invaluable as-is to the author and is likely to remain a maintained project.  I hope you find it as useful as I do.
+
+So far the author's time-poverty has meant the modest benefit:effort ratio of the currently conceived enhancements has not won out.  Though I am increasingly interested in genericizing the codebase for use beyond journald (https://github.com/WJCFerguson/journalctl/issues/16).
+
+Some nice-to-haves are in the Issues list, and more suggestions or bug reports, and especially helpful PRs, are gratefully received to improve this project.
 
 ## Other Packages
 
