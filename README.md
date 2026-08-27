@@ -9,7 +9,7 @@ forensics using journald logs via `journalctl`.
 
 This enhances the basic experience of viewing logs via `async-shell-command`
 (`M-&`).  Initial usage is the same, entering a `journalctl` log query commands in
-the minibuffer` (a package like [`bash-completion.el`](https://github.com/szermatt/emacs-bash-completion)
+the minibuffer (a package like [`bash-completion.el`](https://github.com/szermatt/emacs-bash-completion)
 is helpful to enhance command building).
 
 Then this `journalctl` brings these additional features:
