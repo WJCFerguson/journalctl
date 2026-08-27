@@ -14,6 +14,9 @@ One or more `journalctl` log view commands are spawned via the minibuffer, with 
 This `journalctl` package brings the following additional features:
 
  * rich and clear text highlighting
+ * timestamps are displayed in the timezone of the system being queried (so
+   they remain valid in `--since`/`--until` arguments when querying remote
+   hosts over TRAMP) — see customization option `journalctl-timezone`
  * Multiple simultaneous journalctl processes may run, interleaving output, E.g.:
    *  simultaneously view a broad query, say at '--priority warning' along with
       a more narrowly focused '--priority debug' query.

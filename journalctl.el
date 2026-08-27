@@ -58,6 +58,10 @@
 ;; * prettified output like -o short-precise but with priority level displayed
 ;;   and ISO-esque timestamps in the same format used by --until etc.
 ;;
+;; * timestamps are displayed in the queried system's timezone (customizable
+;;   via `journalctl-timezone'), keeping them valid in --since/--until
+;;   arguments when querying remote hosts.
+;;
 ;; * "C-c C-j" - add an additional process.  If region is active, a --since /
 ;;               --until string will be added to the kill ring corresponding to
 ;;               the selected record lines
@@ -115,6 +119,22 @@
 Functions receive arguments (FIELD-NAME RECORD), where RECORD is
 the parsed-json record."
   :type '(alist :key-type string :value-type function))
+
+(defcustom journalctl-timezone 'system
+  "Timezone used to display record timestamps.
+
+The symbol `system' means the timezone of the system being
+queried, discovered when a journalctl buffer is created, falling
+back to local time if discovery fails.  The symbol `local' means
+the local timezone.  A string is used directly, interpreted like
+the TZ environment variable, e.g. \"UTC\" or \"America/New_York\".
+
+Note that journalctl interprets --since/--until in the queried
+system's timezone, so `system' keeps displayed timestamps valid
+for composing further queries."
+  :type '(choice (const :tag "Queried system's timezone" system)
+                 (const :tag "Local timezone" local)
+                 (string :tag "Fixed TZ string")))
 
 (defcustom journalctl-priority-strings
   '((0 . "EMERG")
@@ -217,6 +237,9 @@ SYSLOG_IDENTIFIER\
 (defvar-local journalctl--primary-commandline nil
   "The command line the process was launched with.")
 
+(defvar-local journalctl--timezone nil
+  "Resolved ZONE for displaying timestamps in this buffer; nil means local.")
+
 (defconst journalctl--max-json-buffer-size 100000
   "Size of the buffer for incoming JSON data before triggering a parse.")
 
@@ -314,10 +337,37 @@ FIELD-NAME defaults to __REALTIME_TIMESTAMP."
          (microseconds (string-to-number (substring timestr (- len 6) len))))
     (cons seconds microseconds)))
 
+(defun journalctl--system-timezone ()
+  "Return the timezone name of the system at `default-directory', or nil."
+  (let ((timezone (string-trim
+                   (shell-command-to-string
+                    "timedatectl show --property=Timezone --value 2>/dev/null \
+|| cat /etc/timezone 2>/dev/null"))))
+    (and (not (string-empty-p timezone)) timezone)))
+
+(defun journalctl--resolve-timezone ()
+  "Resolve `journalctl-timezone' to a ZONE for `format-time-string'.
+
+Returns nil (local time) unless `journalctl-timezone' names a
+zone, or is `system' and `default-directory' is remote, in which
+case the remote system's timezone is discovered."
+  (pcase journalctl-timezone
+    ((pred stringp) journalctl-timezone)
+    ('system
+     (when (file-remote-p default-directory)
+       (or (journalctl--system-timezone)
+           (progn
+             (message "journalctl: cannot determine remote timezone; using local time")
+             nil))))))
+
 (defun journalctl--extract-timestamp (field-name &optional record)
-  "Return timestamp string for display from FIELD-NAME in RECORD."
+  "Return timestamp string for display from FIELD-NAME in RECORD.
+
+Renders in `journalctl--timezone', so on remote hosts the result
+remains valid in --since/--until arguments of further queries."
   (let* ((timestamp (journalctl--timestamp record field-name))
-         (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp))))
+         (display-time (format-time-string "%Y-%m-%d %H:%M:%S" (car timestamp)
+                                           journalctl--timezone)))
     (concat display-time "." (format "%06d" (cdr timestamp)))))
 
 (defun journalctl--format-timestamp (field-name &optional record)
@@ -450,24 +500,30 @@ bear this in mind."
 (defun journalctl--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
   (journalctl--clear-timer process)
-  (let ((json-lines (process-get process 'partial-input)))
+  (let ((json-lines (process-get process 'partial-input))
+        (target-buffer (process-get process 'target-buffer)))
     ;; construct output lines
     (process-put process 'partial-input "")
-    (dolist (line (string-lines json-lines t t))
-      (if (not (string-suffix-p "\n" line))
-          (process-put process 'partial-input line) ;; incomplete line
-        (condition-case result
-            (json-parse-string line) ;; value returned *is* used - silly checker
-          (:success
-           (journalctl--insert-line process
-                                    result
-                                    (journalctl--format-line result)))
-          ((json-parse-error json-readtable-error)
-           (journalctl--insert-line process
-                                    nil
-                                    (format "JSON parse Failure: %S; when parsing %S"
-                                            (cadr result)
-                                            line))))))))
+    ;; format with the target buffer current, so buffer-local settings
+    ;; (e.g. `journalctl--timezone') take effect
+    (with-current-buffer (if (buffer-live-p target-buffer)
+                             target-buffer
+                           (current-buffer))
+      (dolist (line (string-lines json-lines t t))
+        (if (not (string-suffix-p "\n" line))
+            (process-put process 'partial-input line) ;; incomplete line
+          (condition-case result
+              (json-parse-string line) ;; value returned *is* used - silly checker
+            (:success
+             (journalctl--insert-line process
+                                      result
+                                      (journalctl--format-line result)))
+            ((json-parse-error json-readtable-error)
+             (journalctl--insert-line process
+                                      nil
+                                      (format "JSON parse Failure: %S; when parsing %S"
+                                              (cadr result)
+                                              line)))))))))
 
 (defun journalctl--process-sentinel (process _event-description)
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
@@ -642,6 +698,7 @@ With COMMAND and with prefix ARG, prompt for editing the command."
                     (concat "*" remote-host (and remote-host " ") command "*"))))
   (journalctl-mode)
   (setq-local journalctl--primary-commandline (string-trim command))
+  (setq-local journalctl--timezone (journalctl--resolve-timezone))
   (journalctl--make-process command)
   (add-hook 'kill-buffer-hook #'journalctl--kill-processes 0 t)
   (goto-char (point-max)))
