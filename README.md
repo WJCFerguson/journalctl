@@ -39,16 +39,20 @@ Then this `journalctl` brings these additional features:
 
 ## Installation / usage
 
-Install the `journalctl-mode.el` and launch with `M-x journalctl` to get a prompt for your `journalctl` command line.
+Install the `journalctl.el` and launch with `M-x journalctl` or `M-x journalctl-mode` to get a prompt for your `journalctl` command line.
 
 e.g.:
 ``` elisp
-(use-package journalctl-mode)
+(use-package journalctl)
 ```
-
+Or, from the cloned git repository:
+```elisp
+(use-package journalctl
+  :load-path "path/to/journalctl/")
+```
 Installing `bash-completion.el` is highly recommended in general for command execution throughout Emacs, and assists greatly with generating journalctl commands.
 
-Further details and key bindings are included in the Commentary section of [./journalctl-mode.el](./journalctl-mode.el) and docstrings of the entry functions.
+Further details and key bindings are included in the Commentary section of [./journalctl.el](./journalctl.el) and docstrings of the entry functions.
 
 ## Status and Future
 

@@ -51,6 +51,7 @@
 ;;;; Example Installation
 ;;
 ;; (use-package journalctl
+;;  ;; :load-path "optional/path/to/cloned/journalctl/"
 ;;  :bind ("C-c C-j" . journalctl))
 
 ;;;; Features and bindings:
