@@ -1,7 +1,7 @@
 # Emacs Journald Log Viewer
 
 This package defines a mode and functions to aid with monitoring, debugging and
-forensics using journald logs via `journalctl`.
+forensics using journald logs via the `journalctl` command on Linux systems.
 
 **Project Status**:  This project is functional and active!  See [Status and Future](#status-and-future) below.
 
@@ -42,20 +42,22 @@ Then this `journalctl` brings these additional features:
  * buffers are left writable so you can annotate or prune messages freely; if
    you prefer read-only buffers, use
    `(add-hook 'journalctl-mode-hook #'read-only-mode)` — log output insertion
-   is unaffected.  Toggle in the standard way with `M-x read-only-mode` (`C-x C-q)`.
+   is unaffected.  Toggle in the standard way with `M-x read-only-mode` (`C-x C-q`).
 
 ## Installation / usage
 
-Install the `journalctl-mode.el` and launch with `M-x journalctl` to get a prompt for your `journalctl` command line.
+**NOTE:** the package is called "journalctl", and does create a buffer in `journalctl-mode`, but the package should not be confused with the older package called "journalctl-mode".  Apologies for the naming confusion.
+
+Install `journalctl.el` and launch with `M-x journalctl` to get a prompt for the `journalctl` command line.
 
 e.g.:
 ``` elisp
-(use-package journalctl-mode)
+(use-package journalctl)
 ```
 
 Installing `bash-completion.el` is highly recommended in general for command execution throughout Emacs, and assists greatly with generating journalctl commands.
 
-Further details and key bindings are included in the Commentary section of [./journalctl-mode.el](./journalctl-mode.el) and docstrings of the entry functions.
+Further details and key bindings are included in the Commentary section of [./journalctl.el](./journalctl.el) and docstrings of the entry functions.
 
 ## Status and Future
 

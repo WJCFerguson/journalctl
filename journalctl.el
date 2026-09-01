@@ -26,14 +26,14 @@
 ;; This is an Emacs major-mode and functions for viewing and '--follow'ing
 ;; journald logs.
 ;;
-;; It builds upon the experience of running journalctl via `shell-command'
-;; in a `comint' buffer.  As such it leaves the buffer writeable, so you
-;; add/remove/annotate or corrupt the messages in any way you wish.  If you
-;; prefer read-only buffers, (add-hook 'journalctl-mode-hook 'read-only-mode);
-;; log output insertion is unaffected.
+;; It builds upon the experience of running the journalctl process via
+;; `shell-command' in a `comint' buffer.  As such it leaves the buffer
+;; writeable, so you add/remove/annotate or corrupt the messages in any way you
+;; wish.  If you prefer read-only buffers, (add-hook 'journalctl-mode-hook
+;; 'read-only-mode); log output insertion is unaffected.
 ;;
-;; journalctl-mode allows interleaving multiple concurrent or completed
-;; journalctl query processes.  Output is interleaved and de-duplicated in
+;; This package allows interleaving multiple concurrent or completed
+;; journalctl processes.  Output is interleaved and de-duplicated in
 ;; timestamp order.  So for instance you can simultaneously view a broad query
 ;; at '--priority warning' along with a more narrowly focused '--priority debug'
 ;; or '--grep' query.
