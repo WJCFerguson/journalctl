@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023 James Ferguson
 
 ;; Author: James Ferguson <james@faff.org>
-;; Keywords: lisp
+;; Keywords: tools, linux
 ;; URL: https://github.com/WJCFerguson/journalctl
 ;; Version: 1.4
 ;; Package-Requires: ((emacs "29.1"))
