@@ -39,6 +39,10 @@ Then this `journalctl` brings these additional features:
  * the buffer is trimmed to a maximum number of lines (oldest deleted first),
    so a long-running `--follow` won't grow it without bound — see
    customization option `journalctl-buffer-maximum-lines`
+ * buffers are left writable so you can annotate or prune messages freely; if
+   you prefer read-only buffers, use
+   `(add-hook 'journalctl-mode-hook #'read-only-mode)` — log output insertion
+   is unaffected.  Toggle in the standard way with `M-x read-only-mode` (`C-x C-q)`.
 
 ## Installation / usage
 
