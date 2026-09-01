@@ -46,7 +46,7 @@ Then this `journalctl` brings these additional features:
 
 ## Installation / usage
 
-**NOTE:** the package is called "journalctl", and does create a buffer in `journalctl-mode`, but the package should not be confused with the older package called "journalctl-mode".  Apologies for the naming confusion.
+**NOTE:** the package is called "journalctl", and does create a buffer in `journalctl-mode`, but the package should not be confused with the older package called "journalctl-mode".  Apologies for the naming confusion.  The two packages define the same commands (`journalctl`, `journalctl-mode`), so only one can be installed at a time — see [Other Packages](#other-packages) for a comparison.
 
 Install `journalctl.el` and launch with `M-x journalctl` to get a prompt for the `journalctl` command line.
 
@@ -70,3 +70,5 @@ Some nice-to-haves are in the Issues list, and more suggestions or bug reports, 
 ## Other Packages
 
 A prior package called [`journalctl-mode`](https://github.com/SebastianMeisel/journalctl-mode/tree/transient) (rather than just `journalctl`) exists with a rather different focus and approach.  This one fetches and interleaves JSON data using multiple simultaneous asynchronous `journalctl` queries, while the other offers a UI for query-building and chunked synchronous data loading.
+
+Note that the two packages define the same top-level symbols (`journalctl`, `journalctl-mode`, and others), so they cannot coexist in one Emacs session — whichever loads last wins.  Install only one.

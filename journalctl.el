@@ -50,6 +50,10 @@
 ;;
 ;; Launch with command `journalctl'.
 ;;
+;; Note: this package should not be confused with the older, unrelated
+;; package `journalctl-mode'.  Both define the commands `journalctl' and
+;; `journalctl-mode', so only one can be installed at a time.
+;;
 ;;;; Example Installation
 ;;
 ;; (use-package journalctl
