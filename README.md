@@ -36,6 +36,9 @@ Then this `journalctl` brings these additional features:
  * timestamps are displayed in the timezone of the system being queried (so
    they remain valid in `--since`/`--until` arguments when querying remote
    hosts over TRAMP) — see customization option `journalctl-timezone`
+ * the buffer is trimmed to a maximum number of lines (oldest deleted first),
+   so a long-running `--follow` won't grow it without bound — see
+   customization option `journalctl-buffer-maximum-lines`
 
 ## Installation / usage
 

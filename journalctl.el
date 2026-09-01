@@ -136,6 +136,16 @@ for composing further queries."
                  (const :tag "Local timezone" local)
                  (string :tag "Fixed TZ string")))
 
+(defcustom journalctl-buffer-maximum-lines 5000
+  "Maximum number of lines kept in a journalctl buffer.
+
+As new lines arrive, the oldest lines are deleted from the top of
+the buffer to stay within this limit.  A value of nil means no
+limit, in which case a long-running --follow can grow the buffer
+without bound."
+  :type '(choice (integer :tag "Maximum lines")
+                 (const :tag "Unlimited" nil)))
+
 (defcustom journalctl-priority-strings
   '((0 . "EMERG")
     (1 . "ALERT")
@@ -497,6 +507,18 @@ bear this in mind."
             (when (get-buffer-window)
               (set-window-point (get-buffer-window) (point-max)))))))))
 
+(defun journalctl--truncate-buffer ()
+  "Delete oldest lines to keep within `journalctl-buffer-maximum-lines'."
+  (when journalctl-buffer-maximum-lines
+    (save-excursion
+      (save-restriction
+        (widen)
+        (goto-char (point-max))
+        (forward-line (- journalctl-buffer-maximum-lines))
+        (unless (bobp)
+          (let ((inhibit-read-only t))
+            (delete-region (point-min) (point))))))))
+
 (defun journalctl--flush-json (process)
   "Parse any complete json lines received from PROCESS and format into buffer."
   (journalctl--clear-timer process)
@@ -523,7 +545,9 @@ bear this in mind."
                                       nil
                                       (format "JSON parse Failure: %S; when parsing %S"
                                               (cadr result)
-                                              line)))))))))
+                                              line))))))
+      (when (buffer-live-p target-buffer)
+        (journalctl--truncate-buffer)))))
 
 (defun journalctl--process-sentinel (process _event-description)
   "Sentinel function for a journalctl PROCESS serving to a journalctl-mode buffer."
@@ -613,9 +637,8 @@ This stores RECORD as `journalctl--record record' property on the line itself."
 (defun journalctl-follow ()
   "(Re) run the original command of the buffer with --follow.
 
-Starts from the last line of the current buffer
-
-WARNING: no line limit."
+Starts from the last line of the current buffer.  The buffer is
+trimmed to `journalctl-buffer-maximum-lines' as output arrives."
   (interactive)
   (journalctl--make-process
    (append
