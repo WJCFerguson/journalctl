@@ -23,36 +23,34 @@
 
 ;;; Commentary:
 ;;
-;; This is an Emacs major-mode and functions for viewing and '--follow'ing
-;; journald logs.
+;; This package supplies an Emacs major mode and commands to view and
+;; '--follow' journald logs.
 ;;
-;; It builds upon the experience of running the journalctl process via
-;; `shell-command' in a `comint' buffer.  As such it leaves the buffer
-;; writeable, so you add/remove/annotate or corrupt the messages in any way you
-;; wish.  If you prefer read-only buffers, (add-hook 'journalctl-mode-hook
-;; 'read-only-mode); log output insertion is unaffected.
+;; The design follows the experience of a journalctl process in a `comint'
+;; buffer.  The buffer stays writable, so you can add, remove, or annotate
+;; messages.  If you prefer read-only buffers,
+;; (add-hook 'journalctl-mode-hook 'read-only-mode).  Log output insertion
+;; is not affected.
 ;;
-;; This package allows interleaving multiple concurrent or completed
-;; journalctl processes.  Output is interleaved and de-duplicated in
-;; timestamp order.  So for instance you can simultaneously view a broad query
-;; at '--priority warning' along with a more narrowly focused '--priority debug'
-;; or '--grep' query.
+;; Multiple journalctl processes, concurrent or completed, can serve one
+;; buffer.  The package interleaves their output in timestamp order and
+;; removes duplicates.  For example, you can view a broad query at
+;; '--priority warning' together with a narrow '--priority debug' or
+;; '--grep' query.
 ;;
-;; Additional processes may be added at any time, so for instance around a
-;; warning or error message, info or debug lines may be inserted.  To aid this,
-;; if the region is active when adding a process ("C-c C-j"), a
-;; '--since=... --until...' string will be generated and added to the kill ring
-;; to help with query composition.
+;; You can add more processes at any time, for example to show info or
+;; debug lines around a warning or an error.  To aid this, if the region is
+;; active when you add a process ("C-c C-j"), the package puts a
+;; '--since=... --until=...' string for the region on the kill ring.
 ;;
-;; At present it does not offer a specific rich UI for journalctl command
-;; composition.  But enabling `bash-completion.el' or similar will often help
-;; significantly.
+;; The package does not supply a UI for journalctl command composition.
+;; `bash-completion.el' or a similar package helps.
 ;;
-;; Launch with command `journalctl'.
+;; Start with the command `journalctl'.
 ;;
-;; Note: this package should not be confused with the older, unrelated
-;; package `journalctl-mode'.  Both define the commands `journalctl' and
-;; `journalctl-mode', so only one can be installed at a time.
+;; Note: do not confuse this package with the older, unrelated package
+;; `journalctl-mode'.  The two packages define the same commands
+;; (`journalctl' and `journalctl-mode'), so install only one of them.
 ;;
 ;;;; Example Installation
 ;;
@@ -61,36 +59,39 @@
 
 ;;;; Features and bindings:
 ;;
-;; * prettified output like -o short-precise but with priority level displayed
-;;   and ISO-esque timestamps in the same format used by --until etc.
+;; * Output is formatted like '-o short-precise' output, but with the
+;;   priority level shown, and with ISO-style timestamps in the format that
+;;   '--since' and '--until' accept.
 ;;
-;; * timestamps are displayed in the queried system's timezone (customizable
-;;   via `journalctl-timezone'), keeping them valid in --since/--until
-;;   arguments when querying remote hosts.
+;; * Timestamps show in the timezone of the queried system (see
+;;   `journalctl-timezone').  Thus they stay valid in '--since'/'--until'
+;;   arguments for remote hosts.
 ;;
-;; * "C-c C-j" - add an additional process.  If region is active, a --since /
-;;               --until string will be added to the kill ring corresponding to
-;;               the selected record lines
+;; * "C-c C-j" - add a process.  If the region is active, the package puts
+;;               a '--since'/'--until' string for the selected lines on the
+;;               kill ring.
 ;;
-;; * "C-c C-c" - kill a current journalctl process, or with prefix arg, kill all
-;;               of them.  Analogous to the same key in a `comint' buffer
+;; * "C-c C-c" - stop one journalctl process.  With a prefix argument, stop
+;;               all of them.  This key is analogous to the same key in a
+;;               `comint' buffer.
 ;;
-;; * "C-c C-f"  - start/restart the original query with --follow
+;; * "C-c C-f" - start or restart the original query with '--follow'.
 ;;
-;; * "M-."      - Jump to the source of the message if possible, `xref' style.
+;; * "M-."     - go to the source of the message, `xref' style, if the
+;;               record includes source data.
 ;;
-;; * "C-c C-o"  - open a buffer showing the entire journal record at point
+;; * "C-c C-o" - open a buffer that shows the full journal record at point.
 ;;
 
-;;;; Tips/Tricks
+;;;; Tips
 ;;
-;; * bash-completion.el helps you build a journalctl command in a generic way
+;; * `bash-completion.el' helps you compose a journalctl command.
 ;;
-;; * Don't forget good old `highlight-regexp' - 'M-s h (r|l)' (including from
-;;   isearch)
+;; * `highlight-regexp' ("M-s h r" or "M-s h l", also available from
+;;   isearch) highlights matches in the log.
 ;;
-;; * `symbol-overlay-mode' does a great job of jumping to next/prev of
-;;   symbol under cursor (e.g. the journalctl identifier)
+;; * `symbol-overlay-mode' jumps to the next or the previous occurrence of
+;;   the symbol at point (for example, a journalctl identifier).
 ;;
 
 ;;; Code:
