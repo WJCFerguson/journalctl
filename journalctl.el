@@ -5,7 +5,7 @@
 ;; Author: James Ferguson <james@faff.org>
 ;; Keywords: tools, linux
 ;; URL: https://github.com/WJCFerguson/journalctl
-;; Version: 1.4
+;; Version: 1.4.1
 ;; Package-Requires: ((emacs "29.1"))
 
 ;; This program is free software; you can redistribute it and/or modify
