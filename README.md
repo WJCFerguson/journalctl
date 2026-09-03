@@ -31,7 +31,7 @@ Install `journalctl.el`.  Then start it with `M-x journalctl`, and enter a `jour
 For example:
 ``` elisp
 (use-package journalctl
- :vc "git@github.com:WJCFerguson/journalctl.git")
+ :vc "https://github.com/WJCFerguson/journalctl")
 ```
 
 The package `bash-completion.el` improves command composition in Emacs, and helps with `journalctl` commands.
@@ -48,6 +48,6 @@ The Issues list contains more candidate improvements.  Suggestions, bug reports,
 
 ## Other Packages
 
-An older package named [`journalctl-mode`](https://github.com/SebastianMeisel/journalctl-mode/tree/transient) exists, with a different focus and approach.  This package fetches JSON data with multiple simultaneous asynchronous `journalctl` queries, and interleaves the output.  The other package supplies a UI for query composition, and loads data synchronously in chunks.
+An older package named [`journalctl-mode`](https://github.com/SebastianMeisel/journalctl-mode) exists, with a different focus and approach.  This package fetches JSON data with multiple simultaneous asynchronous `journalctl` queries, and interleaves the output.  The other package supplies a transient menu for query composition.  It loads plain-text output asynchronously in fixed-size chunks, and runs the query again for each chunk.
 
 The two packages define the same top-level symbols (`journalctl`, `journalctl-mode`, and more).  Thus they cannot coexist in one Emacs session — the package that loads last wins.  Install only one.
